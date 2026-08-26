@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+
+      # The parser and the fuzzer need no browser at all, and they are where the
+      # security-relevant behaviour lives.
+      - run: pnpm test:unit
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm test:browser
+
+      # Headless Linux browsers have no platform HEVC decoder, so the WebCodecs
+      # strategy does not run here and its tests skip themselves. What this job
+      # actually covers is the container parser and the wasm fallback, on all
+      # three engines.
+      #
+      # A green badge on this workflow does NOT mean the primary decode path is
+      # tested. That needs a real device matrix — see the chrome-hevc project in
+      # playwright.config.ts, run locally with:
+      #   HEIC_CHROME="/path/to/chrome" pnpm test:browser --project=chrome-hevc
+      - name: Note on coverage
+        run: |
+          echo "::notice::WebCodecs HEVC does not run in headless CI. This job covers the parser and the wasm path only."

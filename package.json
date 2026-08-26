@@ -1,0 +1,75 @@
+{
+  "name": "@su-engineering/heic",
+  "version": "0.1.0",
+  "description": "Browser-first HEIC/HEIF decoder. Decodes Apple HEIC photos without unconditionally downloading a WebAssembly codec.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./wasm": {
+      "types": "./dist/wasm.d.ts",
+      "import": "./dist/wasm.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "unpkg": "./dist/heic.global.js",
+  "jsdelivr": "./dist/heic.global.js",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:browser": "playwright test",
+    "test:all": "pnpm typecheck && pnpm build && pnpm test:unit && pnpm test:browser",
+    "fixtures": "sh tools/make-fixtures.sh",
+    "dump": "node --experimental-strip-types tools/dump.ts",
+    "validate-corpus": "node --experimental-strip-types tools/validate-corpus.ts",
+    "prepublishOnly": "pnpm typecheck && pnpm build && pnpm test:unit",
+    "release": "changeset publish"
+  },
+  "keywords": [
+    "heic",
+    "heif",
+    "decode",
+    "webcodecs",
+    "image",
+    "browser",
+    "iphone"
+  ],
+  "devDependencies": {
+    "@changesets/cli": "^2.27.10",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^22.20.1",
+    "libheif-js": "^1.19.8",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "peerDependencies": {
+    "libheif-js": "^1.18.0"
+  },
+  "peerDependenciesMeta": {
+    "libheif-js": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/su-engineering/heic.git"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

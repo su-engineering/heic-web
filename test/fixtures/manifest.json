@@ -1,0 +1,19 @@
+{
+  "libheif-2x2-single.heic": {
+    "device": "unknown",
+    "brand": "heic",
+    "expect": {
+      "width": 2,
+      "height": 2,
+      "isGrid": false,
+      "tileCount": 1,
+      "gridColumns": 1,
+      "gridRows": 1,
+      "bitDepth": 8,
+      "rotation": 0,
+      "mirrored": "none"
+    },
+    "features": {},
+    "reference": "libheif-2x2-single.ref.png"
+  }
+}

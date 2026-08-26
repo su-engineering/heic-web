@@ -1,0 +1,104 @@
+{
+  "asym-base.heic": {
+    "device": "unknown",
+    "brand": "heix",
+    "expect": {
+      "width": 480,
+      "height": 320,
+      "isGrid": false,
+      "tileCount": 1,
+      "gridColumns": 1,
+      "gridRows": 1,
+      "bitDepth": 10,
+      "rotation": 0,
+      "mirrored": "none"
+    },
+    "features": {},
+    "reference": "asym-base.ref.png"
+  },
+  "asym-imir-0.heic": {
+    "device": "unknown",
+    "brand": "heix",
+    "expect": {
+      "width": 480,
+      "height": 320,
+      "isGrid": false,
+      "tileCount": 1,
+      "gridColumns": 1,
+      "gridRows": 1,
+      "bitDepth": 10,
+      "rotation": 0,
+      "mirrored": "vertical"
+    },
+    "features": {},
+    "reference": "asym-imir-0.ref.png"
+  },
+  "asym-imir-1.heic": {
+    "device": "unknown",
+    "brand": "heix",
+    "expect": {
+      "width": 480,
+      "height": 320,
+      "isGrid": false,
+      "tileCount": 1,
+      "gridColumns": 1,
+      "gridRows": 1,
+      "bitDepth": 10,
+      "rotation": 0,
+      "mirrored": "horizontal"
+    },
+    "features": {},
+    "reference": "asym-imir-1.ref.png"
+  },
+  "asym-irot-180.heic": {
+    "device": "unknown",
+    "brand": "heix",
+    "expect": {
+      "width": 480,
+      "height": 320,
+      "isGrid": false,
+      "tileCount": 1,
+      "gridColumns": 1,
+      "gridRows": 1,
+      "bitDepth": 10,
+      "rotation": 180,
+      "mirrored": "none"
+    },
+    "features": {},
+    "reference": "asym-irot-180.ref.png"
+  },
+  "asym-irot-270.heic": {
+    "device": "unknown",
+    "brand": "heix",
+    "expect": {
+      "width": 320,
+      "height": 480,
+      "isGrid": false,
+      "tileCount": 1,
+      "gridColumns": 1,
+      "gridRows": 1,
+      "bitDepth": 10,
+      "rotation": 270,
+      "mirrored": "none"
+    },
+    "features": {},
+    "reference": "asym-irot-270.ref.png"
+  },
+  "asym-irot-90.heic": {
+    "device": "unknown",
+    "brand": "heix",
+    "expect": {
+      "width": 320,
+      "height": 480,
+      "isGrid": false,
+      "tileCount": 1,
+      "gridColumns": 1,
+      "gridRows": 1,
+      "bitDepth": 10,
+      "rotation": 90,
+      "mirrored": "none"
+    },
+    "features": {},
+    "reference": "asym-irot-90.ref.png"
+  }
+}

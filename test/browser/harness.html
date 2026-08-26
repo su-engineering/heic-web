@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>@su-engineering/heic browser harness</title>
+<body>
+<script type="module">
+  import * as heic from '/dist/index.js';
+  import { createWasmAdapter } from '/dist/wasm.js';
+
+  // Everything the tests touch goes through the public API, so the harness
+  // cannot accidentally exercise internals the package does not export.
+  window.heic = heic;
+  window.createWasmAdapter = createWasmAdapter;
+
+  /**
+   * The libheif build the wasm tests use.
+   *
+   * `libheif-js` is a bare specifier, so a browser without a bundler cannot
+   * resolve it. The tests point the adapter at the ESM wasm bundle directly,
+   * which is exactly what the adapter's `loadLibheif` option exists for.
+   */
+  window.wasmAdapter = () =>
+    createWasmAdapter({
+      loadLibheif: () => import('/node_modules/libheif-js/libheif-wasm/libheif-bundle.mjs'),
+    });
+
+  /**
+   * Mean absolute difference between a decoded bitmap and a reference PNG.
+   *
+   * Both are drawn into the same box (longest side 512) before comparing, which
+   * keeps the comparison fast on 48 MP images and stable across GPUs. It is
+   * still far too tight to survive a wrong tile order, a missed rotation or a
+   * mirrored axis: any of those move whole regions of the image.
+   *
+   * A mismatched aspect ratio deliberately produces a large value rather than an
+   * error, so the assertion reports "MAD 74" instead of "threw".
+   */
+  window.meanAbsoluteDifference = async function meanAbsoluteDifference(bitmap, referenceUrl) {
+    const reference = await createImageBitmap(await (await fetch(referenceUrl)).blob());
+    const scale = Math.min(1, 512 / Math.max(reference.width, reference.height));
+    const width = Math.max(1, Math.round(reference.width * scale));
+    const height = Math.max(1, Math.round(reference.height * scale));
+
+    const pixels = (source) => {
+      const canvas = new OffscreenCanvas(width, height);
+      const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
+      ctx.drawImage(source, 0, 0, width, height);
+      return ctx.getImageData(0, 0, width, height).data;
+    };
+
+    const a = pixels(bitmap);
+    const b = pixels(reference);
+    reference.close();
+
+    let total = 0;
+    let count = 0;
+    for (let i = 0; i < a.length; i += 4) {
+      total += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
+      count += 3;
+    }
+    return total / count;
+  };
+
+  window.ready = true;
+</script>
+</body>
