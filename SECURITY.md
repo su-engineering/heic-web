@@ -6,7 +6,7 @@ taken seriously.
 
 ## Reporting a vulnerability
 
-Email **m@mhrsntrk.com** with `@su-engineering/heic` in the subject line.
+Email **hello@su.engineering** with `@su-engineering/heic` in the subject line.
 
 Please include the file that triggers it if you can share one, or a script that
 generates it. A reproducing input is worth more than a description.
