@@ -86,6 +86,18 @@ export interface DecodedImage {
   warnings: HeicWarning[];
 }
 
+export interface ConvertOptions extends DecodeOptions {
+  /** Output format. Default 'image/jpeg'. */
+  type?: 'image/jpeg' | 'image/png';
+  /** JPEG encoder quality, from 0 to 1. Default 0.92; ignored for PNG. */
+  quality?: number;
+}
+
+/** Encoded pixels and decode metadata; no bitmap needs to be closed by the caller. */
+export interface ConvertedImage extends Omit<DecodedImage, 'image'> {
+  blob: Blob;
+}
+
 export interface SupportReport {
   /** `createImageBitmap` decodes HEIC directly (Safari, some Chrome builds). */
   native: boolean;

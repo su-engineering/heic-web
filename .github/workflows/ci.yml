@@ -47,6 +47,8 @@ jobs:
       - run: pnpm test:package
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: pnpm test:browser
+      - name: Smoke-test the comparison benchmark
+        run: node tools/benchmark.mjs --iterations 1 --cold 1 --output benchmark-results/smoke.json
 
       # Headless Linux generally lacks platform HEVC decoding. Some WebKit
       # builds accept limited HEVC profiles. Tests check each fixture config;

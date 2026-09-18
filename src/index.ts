@@ -1,5 +1,5 @@
 import { toHeicBlob } from './bytes.ts';
-import { HeicAbortError, HeicUnsupportedError } from './errors.ts';
+import { HeicAbortError, HeicDecodeError, HeicUnsupportedError } from './errors.ts';
 import { decodeNative } from './decoders/native.ts';
 import { decodeWithWebCodecs, isWebCodecsAvailable } from './decoders/webcodecs.ts';
 import { DETECTION_PREFIX_BYTES, detectFromBuffer } from './parser/detect.ts';
@@ -8,6 +8,8 @@ import { createCanvas, throwIfAborted } from './render/canvas.ts';
 import { applyTransforms, summarizeTransforms } from './render/transform.ts';
 import type {
   DecodeOptions,
+  ConvertOptions,
+  ConvertedImage,
   DecodedImage,
   DecoderAdapter,
   Strategy,
@@ -47,6 +49,8 @@ export type {
   AdapterRequest,
   AdapterResult,
   DecodeOptions,
+  ConvertOptions,
+  ConvertedImage,
   DecodedImage,
   DecoderAdapter,
   HeicWarning,
@@ -202,6 +206,46 @@ export async function decodeHeic(
     itemType: plan.file.items.get(plan.primaryItemId)?.itemType,
     itemId: plan.primaryItemId,
   });
+}
+
+/**
+ * Convert the primary HEIC image to JPEG or PNG using the browser's encoder.
+ * Uses the same explicit decode cascade as decodeHeic and releases all pixels.
+ * Source EXIF is not copied into the output file.
+ */
+export async function convertHeic(
+  input: BinaryInput,
+  options: ConvertOptions = {},
+): Promise<ConvertedImage> {
+  const { type = 'image/jpeg', quality = 0.92, ...decodeOptions } = options;
+  if (type !== 'image/jpeg' && type !== 'image/png') {
+    throw new TypeError('type must be image/jpeg or image/png');
+  }
+  if (!Number.isFinite(quality) || quality < 0 || quality > 1) {
+    throw new RangeError('quality must be a finite number between 0 and 1');
+  }
+  const decoded = await decodeHeic(input, decodeOptions);
+  let canvas: OffscreenCanvas | undefined;
+  try {
+    throwIfAborted(options.signal);
+    canvas = createCanvas(decoded.width, decoded.height);
+    const ctx = canvas.getContext('2d', { colorSpace: options.colorSpace ?? 'srgb', alpha: false });
+    if (!ctx) throw new HeicDecodeError('Could not get a 2d context for conversion', {});
+    ctx.drawImage(decoded.image, 0, 0);
+    const blob = await canvas.convertToBlob({ type, quality });
+    throwIfAborted(options.signal);
+    if (blob.type !== type || blob.size === 0) {
+      throw new HeicDecodeError(`Browser could not encode ${type}`, {});
+    }
+    const { image: _image, ...metadata } = decoded;
+    return { ...metadata, blob };
+  } finally {
+    decoded.image.close();
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

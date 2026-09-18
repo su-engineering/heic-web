@@ -41,7 +41,8 @@
     "validate-corpus": "node --experimental-strip-types tools/validate-corpus.ts",
     "prepublishOnly": "pnpm typecheck && pnpm build && pnpm test:package && pnpm test:unit",
     "release": "node tools/publish.mjs",
-    "test:package": "node tools/check-package.mjs"
+    "test:package": "node tools/check-package.mjs",
+    "benchmark": "pnpm build && node tools/benchmark.mjs"
   },
   "keywords": [
     "heic",
@@ -50,21 +51,25 @@
     "webcodecs",
     "image",
     "browser",
-    "iphone"
+    "iphone",
+    "conversion",
+    "jpeg",
+    "png"
   ],
   "devDependencies": {
     "@changesets/cli": "^2.27.10",
     "@playwright/test": "^1.62.1",
     "@types/node": "^22.20.1",
     "esbuild": "^0.28.1",
-    "libheif-js": "^1.19.8",
+    "heic-to": "1.5.2",
+    "libheif-js": "^1.23.2",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vitest": "^4.1.11"
   },
   "peerDependencies": {
-    "libheif-js": "^1.18.0"
+    "libheif-js": "^1.23.2"
   },
   "peerDependenciesMeta": {
     "libheif-js": {

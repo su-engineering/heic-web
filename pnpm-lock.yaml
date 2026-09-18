@@ -23,8 +23,11 @@ importers:
       esbuild:
         specifier: ^0.28.1
         version: 0.28.2
+      heic-to:
+        specifier: 1.5.2
+        version: 1.5.2
       libheif-js:
-        specifier: ^1.19.8
+        specifier: ^1.23.2
         version: 1.23.2
       tsup:
         specifier: ^8.5.1
@@ -650,6 +653,9 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+
+  heic-to@1.5.2:
+    resolution: {integrity: sha512-8Fns+lZHAWmz5U5IUxDeXKwIf3foBoKNPLxxFY4B0MkLjNuomEIHCoDbDE+x/llFK3NCEO1cu4+n3iUKY+Svmw==}
 
   human-id@4.2.1:
     resolution: {integrity: sha512-zPGsiS+dWoTZtZ4AtpA9Y+BdSFSNWvnouNlWNoUFyAM6xHOHmdCvqO3k8AIbdamCOv4gUFUVNPf6rJFfc4UiJw==}
@@ -1700,6 +1706,8 @@ snapshots:
       slash: 3.0.0
 
   graceful-fs@4.2.11: {}
+
+  heic-to@1.5.2: {}
 
   human-id@4.2.1: {}
 
