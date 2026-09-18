@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible parser or decoder problem.
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities, follow SECURITY.md instead. Do not upload personal photos or sensitive metadata."
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include steps to reproduce and a minimal code example.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and operating system versions
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Strategy and diagnostics
+      description: Include probeSupport(), error context/attempts, warnings, and relevant logs.
+  - type: textarea
+    id: fixture
+    attributes:
+      label: Reproducing input
+      description: Attach only a non-sensitive file you have permission to redistribute, or a generation script.

@@ -14,7 +14,7 @@ export default defineConfig([
   },
   {
     // CDN build: <script src="https://unpkg.com/@su-engineering/heic"></script>
-    entry: { 'heic.global': 'src/index.ts' },
+    entry: { heic: 'src/index.ts' },
     format: ['iife'],
     globalName: 'HeicDecoder',
     dts: false,

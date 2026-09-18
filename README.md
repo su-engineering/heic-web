@@ -1,191 +1,149 @@
 # @su-engineering/heic
 
-Decode iPhone HEIC photos in the browser, without shipping a WebAssembly codec to
-everyone.
+**Decode HEIC photos in the browser with native decoding, WebCodecs, and an optional WebAssembly fallback.**
 
-Chrome and Firefox cannot display HEIC. Google never licensed HEVC, so there is
-no native image decode path and no plan to add one. Every iPhone still produces
-HEIC by default, so any site that accepts profile picture uploads silently fails
-for a large share of its users.
+[![CI](https://github.com/su-engineering/heic-web/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/su-engineering/heic-web/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The usual answer is to ship libheif compiled to WebAssembly, roughly 1.2 MB, to
-every visitor. That is the only reason most sites do not bother.
+HEIC uploads need not force every visitor to download a software codec. This TypeScript library parses the HEIF container, tries the browser's image decoder, then uses WebCodecs HEVC decoding when available. You choose whether to load the libheif fallback if both paths fail.
 
-This package takes a different route. HEIC is an HEVC-coded image inside an
-ISOBMFF container, and Chrome's WebCodecs `VideoDecoder` has supported HEVC since
-Chrome 107, backed by platform hardware decode. Parse the container in JavaScript,
-hand the raw bitstream to `VideoDecoder`, and you get hardware-accelerated HEIC
-decode with no wasm at all, on the large majority of devices.
+- **On-demand fallback:** the core entry point does not import libheif or fetch a codec.
+- **Primary-image decoding:** single HEVC items and tiled grids, with container rotation, mirroring, and clean-aperture cropping.
+- **Useful diagnostics:** selected strategy, source dimensions, color metadata, and warnings accompany each bitmap.
+- **Worker support:** no DOM dependency; compositing uses `OffscreenCanvas`.
+- **Typed API:** ESM, TypeScript declarations, and a standalone browser bundle.
 
-**10.5 KB gzipped.** wasm becomes a last-resort fallback that you opt into, not
-the default.
+The project is at **0.1.0**. Test it with representative files and target devices before production use. The repository is named `heic-web`; the npm package name is `@su-engineering/heic`.
 
-## Usage
+[API reference](docs/api.md) · [Compatibility and limitations](docs/compatibility.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-```ts
-import { decodeHeic, isHeic } from '@su-engineering/heic';
+## Installation
 
-const file = input.files[0];
-if ((await isHeic(file)).isHeic) {
-  const { image, width, height } = await decodeHeic(file);
-  canvas.getContext('2d').drawImage(image, 0, 0);
-}
+When the package has been published to your registry:
+
+```sh
+npm install @su-engineering/heic
 ```
 
-## Support matrix
+For a checkout before publication, see [local development](CONTRIBUTING.md#local-development). Decoding runs in a browser or browser worker. Node.js can run the container parser, but this package does not provide a Node.js pixel decoder.
 
-Measured, not assumed — these are the numbers `probeSupport()` returns in each
-browser, on macOS:
+## Quick start
 
-| Browser | Native | WebCodecs HEVC | Strategy used | Cost |
-|---|---|---|---|---|
-| Safari / WebKit | yes | yes | `native` | free |
-| Chrome, Edge, Brave (macOS, most Android, Windows with the HEVC extension) | no | yes | `webcodecs` | ~10 KB |
-| Chrome on Linux, Windows without the HEVC extension | no | no | `wasm` | ~1.2 MB, opt-in |
-| Firefox | no | no | `wasm` | ~1.2 MB, opt-in |
+This example assumes an `<input id="photo" type="file">` and `<canvas id="preview">` on the page. It uses only browser-provided decoders; unsupported environments receive a typed error.
 
-Ask before you download anything:
+```ts
+import { decodeHeic, isHeic, HeicUnsupportedError } from '@su-engineering/heic';
+
+const input = document.querySelector<HTMLInputElement>('#photo')!;
+const canvas = document.querySelector<HTMLCanvasElement>('#preview')!;
+
+input.addEventListener('change', async () => {
+  const file = input.files?.[0];
+  if (!file || !(await isHeic(file)).isHeic) return;
+
+  try {
+    const decoded = await decodeHeic(file, { maxDimension: 1024 });
+    try {
+      canvas.width = decoded.width;
+      canvas.height = decoded.height;
+      canvas.getContext('2d')!.drawImage(decoded.image, 0, 0);
+      console.log(decoded.strategy, decoded.warnings);
+    } finally {
+      decoded.image.close(); // Release pixels when you no longer need them.
+    }
+  } catch (error) {
+    if (error instanceof HeicUnsupportedError) {
+      console.error('No decoder succeeded:', error.attempts);
+    } else {
+      console.error('Could not decode this photo:', error);
+    }
+  }
+});
+```
+
+`isHeic()` inspects file contents, rather than trusting the filename or MIME type. It is a routing hint, not a complete validation step. AVIF is not decoded by this package.
+
+## Add the optional WASM fallback
+
+```sh
+npm install libheif-js
+```
+
+```ts
+import { decodeHeic } from '@su-engineering/heic';
+
+const decoded = await decodeHeic(file, {
+  wasmLoader: async () => {
+    const { wasmDecoder } = await import('@su-engineering/heic/wasm');
+    return wasmDecoder;
+  },
+});
+// Draw or transfer decoded.image, then close it when finished.
+```
+
+The separate entry point loads `libheif-js/wasm-bundle.js` on its first decode. A bundler supporting dynamic imports can keep the adapter and codec out of the initial chunk. Check your bundler's output: asset splitting and download sizes depend on your toolchain and the libheif version.
+
+For self-hosted assets, custom builds, or direct browser imports, use [`createWasmAdapter`](docs/api.md#wasm-adapters). The core library is MIT licensed; optional libheif distributions have [their own licenses](docs/compatibility.md#third-party-code).
+
+## Choose by capability
+
+In `auto` mode the cascade is **native → WebCodecs → supplied fallback**. Without a fallback, a file that needs one fails with `HeicUnsupportedError`.
 
 ```ts
 import { probeSupport } from '@su-engineering/heic';
 
-const report = await probeSupport();
-// { native: false, webcodecs: true,
-//   hevcCodecStrings: ['hvc1.3.e.L93.B0', ...], recommended: 'webcodecs' }
-
-if (report.recommended === 'wasm') {
-  // Only now is it worth preloading the fallback.
-}
+const support = await probeSupport();
+console.log(support.native, support.webcodecs, support.recommended);
 ```
 
-## The wasm fallback
+HEVC support depends on the browser, OS, installed codecs, hardware, and file profile. A capability probe is advisory; decoding a particular file can still fail. Use HTTPS or localhost for WebCodecs. See the [compatibility guide](docs/compatibility.md) for requirements and test coverage.
 
-Nothing is fetched behind your back. If strategies 1 and 2 both fail and you have
-not supplied an adapter, `decodeHeic` throws `HeicUnsupportedError` naming what
-was missing.
+## API at a glance
 
-```ts
-import { decodeHeic } from '@su-engineering/heic';
-import { wasmDecoder } from '@su-engineering/heic/wasm';
+| Export | Purpose |
+| --- | --- |
+| `decodeHeic(input, options?)` | Decode a `Blob`, `File`, `ArrayBuffer`, or `Uint8Array` to an `ImageBitmap` plus metadata. |
+| `isHeic(input)` | Inspect up to the first 64 KiB for HEIC identification and coding hints. |
+| `probeSupport()` | Probe native HEIC decoding and accepted WebCodecs HEVC configurations. |
+| `parseHeif(buffer)` | Inspect container items, properties, references, and locations without decoding pixels. |
+| `planDecode(buffer)` | Resolve the primary image, tile layout, transforms, and source metadata. |
+| `registerDecoderAdapter(adapter)` | Register a fallback for subsequent calls in the current JavaScript realm. |
 
-await decodeHeic(file, { wasmLoader: async () => wasmDecoder });
+Common decode options are `strategy`, `maxDimension`, `colorSpace`, `signal`, and `wasmLoader`. The [API reference](docs/api.md) documents their behavior and the complete exported surface.
+
+## Scope and limits
+
+This library returns pixels for the primary HEVC image. It does not encode HEIC, supply an upload UI, preserve EXIF in the output, or decode AVIF, animation, or Live Photo video. Recognized alpha, depth, and HDR gain-map auxiliary items produce warnings; warning coverage is not exhaustive.
+
+`maxDimension` reduces the returned bitmap size. **It does not cap peak decode memory:** decoding and compositing may still allocate the full-resolution image. Apply file-size limits, bound concurrent decodes, and use workers for large or untrusted uploads.
+
+`display-p3` requests a compositing canvas color space; it is not a guarantee of color fidelity across strategies. See [color and HDR limitations](docs/compatibility.md#color-and-hdr).
+
+## Development
+
+```sh
+git clone https://github.com/su-engineering/heic-web.git
+cd heic-web
+corepack enable
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm build
+pnpm test:package
+pnpm test:unit
+pnpm exec playwright install --with-deps chromium firefox webkit
+pnpm test:browser
 ```
 
-`@su-engineering/heic/wasm` is a separate entry point, so bundlers never pull the
-codec into your main chunk. It needs `libheif-js`, an optional peer dependency —
-the core package builds and passes its tests without it installed.
+Use Node.js 22.12 or newer for development. The locked pnpm version is declared in `package.json`. Browser installation with `--with-deps` is intended for supported Linux distributions; on other platforms, see [test setup](CONTRIBUTING.md#browser-tests).
 
-## API
+Headless Linux tests exercise the parser and fallback. They cannot establish platform HEVC coverage. Committed fixtures also do not cover the full range of Apple camera files. See [test fixtures](https://github.com/su-engineering/heic-web/blob/master/test/fixtures/README.md) and the [release checklist](docs/releasing.md).
 
-### `decodeHeic(input, options?): Promise<DecodedImage>`
+## Help and contributions
 
-`input` is a `Blob`, `File`, `ArrayBuffer` or `Uint8Array`.
+Report reproducible bugs through [GitHub issues](https://github.com/su-engineering/heic-web/issues). Include browser/OS versions, the selected strategy or error context, and a redistributable sample when possible. Keep personal photographs and exploitable inputs out of public reports.
 
-| Option | Default | Meaning |
-|---|---|---|
-| `strategy` | `'auto'` | `'native'`, `'webcodecs'`, `'wasm'`, or `'auto'` for the cascade |
-| `colorSpace` | `'srgb'` | Canvas colour space. `'display-p3'` preserves wide-gamut source colour |
-| `maxDimension` | — | Downscale the result so its longest side is at most this. A memory control, see below |
-| `signal` | — | `AbortSignal`, honoured at every await including mid-way through a multi-tile decode |
-| `wasmLoader` | — | Supplies the fallback adapter on demand |
+Small fixes, regression tests, and consented fixture contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately using [SECURITY.md](SECURITY.md).
 
-The result reports what happened, not just pixels:
+## License
 
-```ts
-{
-  image: ImageBitmap,
-  width, height,              // of the returned bitmap
-  sourceWidth, sourceHeight,  // intrinsic size, before any maxDimension scaling
-  strategy: 'webcodecs',
-  bitDepth: 8,
-  isGrid: true,
-  tileCount: 48,
-  sourceColor: { type: 'icc', profile: Uint8Array } | { type: 'nclx', ... } | null,
-  transformsApplied: { rotation: 270, mirrored: 'none', cropped: false },
-  warnings: [{ code: 'gain-map-ignored', message: '...' }],
-}
-```
-
-### `isHeic(input): Promise<{ isHeic, brand?, primaryItemType?, coding? }>`
-
-Reads the `ftyp` brands and the primary item type — never the filename or the
-MIME type the browser guessed, both of which are routinely wrong for photos
-copied off a phone. Given a `Blob`, it reads only the first 64 KB, because you
-will want to call it on every file a user drops.
-
-AVIF shares the `mif1` brand with HEIC, so the result is discriminated rather
-than boolean. A `{ isHeic: false, coding: 'av1' }` tells you to route the file to
-an AVIF decoder instead of treating it as unreadable.
-
-### `probeSupport(): Promise<SupportReport>`
-
-Cheap capability report. `isConfigSupported` is a query, not a decoder, and the
-native probe decodes a 471-byte inline image.
-
-### `parseHeif(buffer): HeifFile`
-
-The container parser on its own, for inspection tooling and tests. There is also
-a box-tree dumper:
-
-```
-node --experimental-strip-types tools/dump.ts photo.heic --boxes
-```
-
-### `maxDimension` is a memory control
-
-Not an image processing feature. A 48 MP iPhone photo composited at full
-resolution is a ~190 MB canvas, and if you are building a 512 px avatar you
-should not have to hold that. When set, the bitmap is produced with
-`resizeQuality: 'high'` and the full-size canvas is released immediately. Only
-the decoder can free it that early, which is the whole reason this one flag lives
-here rather than in a wrapper.
-
-## Works in a Web Worker
-
-The core never touches `document` or `window` — `OffscreenCanvas` only, and
-`VideoDecoder` is available in workers. This is a tested requirement, not an
-aspiration: the suite runs a full decode inside a worker on every browser.
-
-## What this does not do
-
-Deliberately narrow. It decodes. It does not resize, re-encode, strip EXIF, or
-provide UI.
-
-Not supported in 0.1, and detected rather than ignored — when one of these is
-present the primary image still decodes and a structured warning says what was
-skipped:
-
-- Alpha aux images
-- Depth maps
-- HDR gain maps (iOS 17+)
-- Live Photo motion tracks
-- Multi-image bursts and image sequences
-- Animated HEIF
-- HEIC **encoding**
-- `VideoFrame` output — for grid images there is no single decoder frame, and
-  offering it would work for single-item files and be a lie for the common case
-- Any re-encoding, format conversion or metadata stripping
-
-## Security
-
-This parses hostile input in your users' browsers. Every read is bounds-checked,
-nesting is capped, and no allocation is made on a declared size without first
-validating it against the actual buffer. The parser is fuzzed with mutated real
-files: every crash is a bug, every hang is a worse one.
-
-**This is a client-side decoder. Your server must still validate uploads
-independently.** Nothing here is a substitute for that.
-
-See [SECURITY.md](./SECURITY.md).
-
-## Errors
-
-A typed hierarchy, never a bare `Error`. Each carries enough context to file a
-useful bug report — brand, item type, strategy attempted, codec string.
-
-`HeicParseError`, `HeicUnsupportedError`, `HeicDecodeError`, `HeicAbortError`,
-all extending `HeicError`.
-
-## Licence
-
-MIT
+[MIT](LICENSE), copyright SU Engineering. See [third-party code](docs/compatibility.md#third-party-code) for optional codec licensing.

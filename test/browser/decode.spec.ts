@@ -64,11 +64,12 @@ test.describe('isHeic', () => {
 
   test('reads only the first 64 KB of a Blob', async ({ page }) => {
     const sliced = await page.evaluate(async () => {
-      const blob = await (await fetch('/test/fixtures/local/IMG_3031.heic')).blob();
+      const blob = await (await fetch('/test/fixtures/generated/asym-base.heic')).blob();
+      const largeBlob = new Blob([blob, new Uint8Array(2_000_000)]);
       const ranges: { start: number; end: number }[] = [];
       // Wrap slice() to observe what the detector actually asks for.
-      const original = blob.slice.bind(blob);
-      const spy = new Proxy(blob, {
+      const original = largeBlob.slice.bind(largeBlob);
+      const spy = new Proxy(largeBlob, {
         get(target, property) {
           if (property === 'slice') {
             return (start: number, end: number) => {
@@ -81,7 +82,7 @@ test.describe('isHeic', () => {
         },
       });
       await window.heic.isHeic(spy as Blob);
-      return { ranges, size: blob.size };
+      return { ranges, size: largeBlob.size };
     });
     expect(sliced.size).toBeGreaterThan(1_000_000);
     expect(sliced.ranges).toEqual([{ start: 0, end: 65_536 }]);
@@ -91,7 +92,7 @@ test.describe('isHeic', () => {
 test.describe('decode', () => {
   for (const fixture of loadFixtures()) {
     test(`decodes ${fixture.name} (${fixture.device})`, async ({ page }) => {
-      const supported = (await hasWebCodecsHevc(page)) || (await hasNative(page));
+      const supported = (await hasWebCodecsHevc(page, fixture.url)) || (await hasNative(page, fixture.url));
       test.skip(
         !supported,
         'no native or WebCodecs HEVC decode in this browser; the wasm path is covered separately',
@@ -142,8 +143,8 @@ test.describe('decode', () => {
   test('maxDimension scales the result and leaves sourceWidth intact', async ({ page }) => {
     test.skip(!(await hasWebCodecsHevc(page)) && !(await hasNative(page)), 'no decode path');
     const result = await page.evaluate(async () => {
-      const blob = await (await fetch('/test/fixtures/local/IMG_3031.heic')).blob();
-      const decoded = await window.heic.decodeHeic(blob, { maxDimension: 512 });
+      const blob = await (await fetch('/test/fixtures/generated/asym-base.heic')).blob();
+      const decoded = await window.heic.decodeHeic(blob, { maxDimension: 240 });
       const summary = {
         width: decoded.width,
         height: decoded.height,
@@ -153,17 +154,17 @@ test.describe('decode', () => {
       decoded.image.close();
       return summary;
     });
-    expect(Math.max(result.width, result.height)).toBe(512);
+    expect(Math.max(result.width, result.height)).toBe(240);
     // Aspect ratio preserved, and the intrinsic size still reported.
-    expect(result.sourceWidth).toBe(3888);
-    expect(result.sourceHeight).toBe(6912);
-    expect(result.width / result.height).toBeCloseTo(3888 / 6912, 2);
+    expect(result.sourceWidth).toBe(480);
+    expect(result.sourceHeight).toBe(320);
+    expect(result.width / result.height).toBeCloseTo(480 / 320, 2);
   });
 
   test('honours an AbortSignal mid-decode', async ({ page }) => {
     test.skip(!(await hasWebCodecsHevc(page)), 'WebCodecs path required to abort mid-tile');
     const outcome = await page.evaluate(async () => {
-      const blob = await (await fetch('/test/fixtures/local/IMG_3031.heic')).blob();
+      const blob = await (await fetch('/test/fixtures/generated/asym-base.heic')).blob();
       const controller = new AbortController();
       const promise = window.heic.decodeHeic(blob, {
         strategy: 'webcodecs',
@@ -242,7 +243,7 @@ test.describe('resource leaks', () => {
       const outcome = await new Promise<Record<string, unknown>>((resolve) => {
         worker.onmessage = (event) => resolve(event.data);
         worker.onerror = (event) => resolve({ ok: false, error: `worker error: ${event.message}` });
-        worker.postMessage({ url: '/test/fixtures/local/IMG_0679.HEIC', strategy: 'webcodecs' });
+        worker.postMessage({ url: '/test/fixtures/generated/asym-irot-270.heic', strategy: 'webcodecs' });
       });
       worker.terminate();
       return outcome;
@@ -251,9 +252,9 @@ test.describe('resource leaks', () => {
     expect(result.ok, String(result.error)).toBe(true);
     expect(result.isHeic).toBe(true);
     expect(result.strategy).toBe('webcodecs');
-    expect(result.width).toBe(3024);
-    expect(result.height).toBe(4032);
-    expect(result.tileCount).toBe(48);
+    expect(result.width).toBe(320);
+    expect(result.height).toBe(480);
+    expect(result.tileCount).toBe(1);
     // The rotation is applied inside the worker too, via OffscreenCanvas only.
     expect(result.rotation).toBe(270);
   });

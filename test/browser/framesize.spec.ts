@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { hasWebCodecsHevc, openHarness } from './support.ts';
+import { hasWebCodecsHevc, loadFixtures, openHarness } from './support.ts';
 
 /**
  * The decoder's output frame size must match the item's `ispe`.
@@ -16,13 +16,9 @@ test.beforeEach(async ({ page }) => {
   await openHarness(page);
 });
 
-for (const url of [
-  '/test/fixtures/libheif-2x2-single.heic',
-  '/test/fixtures/generated/asym-base.heic',
-  '/test/fixtures/local/IMG_0679.HEIC',
-]) {
+for (const { url } of loadFixtures()) {
   test(`decoder frame size matches ispe for ${url.split('/').pop()}`, async ({ page }) => {
-    test.skip(!(await hasWebCodecsHevc(page)), 'WebCodecs path required');
+    test.skip(!(await hasWebCodecsHevc(page, url)), 'WebCodecs path required');
 
     const result = await page.evaluate(async (fixtureUrl) => {
       const bytes = new Uint8Array(await (await fetch(fixtureUrl)).arrayBuffer());

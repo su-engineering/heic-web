@@ -39,7 +39,7 @@ test.describe('cross-strategy consistency', () => {
   for (const fixture of loadFixtures()) {
     test(`${fixture.name}: WebCodecs and wasm agree`, async ({ page }) => {
       test.skip(
-        !(await hasWebCodecsHevc(page)),
+        !(await hasWebCodecsHevc(page, fixture.url)),
         'needs the WebCodecs path to compare against',
       );
 
@@ -115,7 +115,7 @@ test.describe('cross-strategy consistency', () => {
 test('the wasm strategy works on its own, with no WebCodecs involved', async ({ page }) => {
   // The path a Firefox or Linux-desktop user actually takes.
   const result = await page.evaluate(async () => {
-    const blob = await (await fetch('/test/fixtures/local/IMG_0679.HEIC')).blob();
+    const blob = await (await fetch('/test/fixtures/generated/asym-irot-270.heic')).blob();
     const decoded = await window.heic.decodeHeic(blob, {
       strategy: 'wasm',
       wasmLoader: async () => window.wasmAdapter(),
@@ -132,10 +132,10 @@ test('the wasm strategy works on its own, with no WebCodecs involved', async ({ 
   });
 
   expect(result.strategy).toBe('wasm');
-  // Rotated once, not twice: 4032x3024 coded, 3024x4032 displayed.
-  expect(result.width).toBe(3024);
-  expect(result.height).toBe(4032);
+  // Rotated once, not twice: 480x320 coded, 320x480 displayed.
+  expect(result.width).toBe(320);
+  expect(result.height).toBe(480);
   expect(result.rotation).toBe(270);
   // Reported from our parser even though libheif did the decoding.
-  expect(result.tileCount).toBe(48);
+  expect(result.tileCount).toBe(1);
 });

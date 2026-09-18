@@ -73,17 +73,45 @@ export async function openHarness(page: Page): Promise<void> {
   if (errors.length > 0) throw new Error(`harness failed to load: ${errors.join('; ')}`);
 }
 
-/** Whether this browser can run the WebCodecs strategy at all. */
-export async function hasWebCodecsHevc(page: Page): Promise<boolean> {
-  return page.evaluate(async () => {
-    const report = await (window as never as { heic: { probeSupport(): Promise<{ webcodecs: boolean }> } }).heic.probeSupport();
-    return report.webcodecs;
-  });
+/** Check the actual fixture profile, not only a generic HEVC probe. */
+export async function hasWebCodecsHevc(
+  page: Page,
+  url = '/test/fixtures/generated/asym-base.heic',
+): Promise<boolean> {
+  return page.evaluate(async (fixtureUrl) => {
+    if (typeof VideoDecoder === 'undefined') return false;
+    const response = await fetch(fixtureUrl);
+    if (!response.ok) throw new Error(`Fixture fetch failed: ${fixtureUrl}`);
+    const plan = window.heic.planDecode(new Uint8Array(await response.arrayBuffer()));
+    for (const group of plan.tileGroups) {
+      const tile = plan.tiles[group.tileIndices[0]!]!;
+      const configs: VideoDecoderConfig[] = [
+        { codec: group.codec, description: new Uint8Array(group.hvcc.raw), codedWidth: tile.width, codedHeight: tile.height, optimizeForLatency: true },
+        { codec: window.heic.hvccToCodecString(group.hvcc, 'hev1'), codedWidth: tile.width, codedHeight: tile.height, optimizeForLatency: true },
+      ];
+      let supported = false;
+      for (const config of configs) {
+        try {
+          if ((await VideoDecoder.isConfigSupported(config)).supported) supported = true;
+        } catch { /* An unsupported configuration can reject instead of returning false. */ }
+      }
+      if (!supported) return false;
+    }
+    return true;
+  }, url);
 }
 
-export async function hasNative(page: Page): Promise<boolean> {
-  return page.evaluate(async () => {
-    const report = await (window as never as { heic: { probeSupport(): Promise<{ native: boolean }> } }).heic.probeSupport();
-    return report.native;
-  });
+export async function hasNative(
+  page: Page,
+  url = '/test/fixtures/generated/asym-base.heic',
+): Promise<boolean> {
+  return page.evaluate(async (fixtureUrl) => {
+    const response = await fetch(fixtureUrl);
+    if (!response.ok) throw new Error(`Fixture fetch failed: ${fixtureUrl}`);
+    try {
+      const image = await createImageBitmap(await response.blob());
+      image.close();
+      return true;
+    } catch { return false; }
+  }, url);
 }
