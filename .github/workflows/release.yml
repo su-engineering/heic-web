@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-master
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  release:
+    if: github.ref == 'refs/heads/master'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Install OIDC-capable npm
+        run: npm install --global npm@11
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test:package
+      - name: Ensure this is still the current release commit
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          current_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/master" --jq .sha)
+          if [ "$current_sha" = "$EXPECTED_SHA" ]; then
+            echo "matches=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "A newer master commit exists; its release run will handle publication."
+          fi
+      - name: Create version PR or publish via trusted publishing
+        if: steps.current.outputs.matches == 'true'
+        id: changesets
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1
+        with:
+          version: pnpm exec changeset version
+          publish: pnpm release
+          title: 'Release: update package version'
+          commit: 'chore: version package'
+      # GITHUB_TOKEN-created PRs do not trigger pull_request workflows.
+      # Explicit dispatch validates the generated version branch without a PAT.
+      - name: Run CI on the generated version PR
+        if: steps.changesets.outputs.pullRequestNumber != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref changeset-release/master
