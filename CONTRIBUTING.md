@@ -17,7 +17,7 @@ pnpm test:package
 pnpm test:unit
 ```
 
-The package can be used before registry publication by building it and importing `dist/index.js`, or by installing a tarball created with `pnpm pack --pack-destination /tmp/heic-pack`. The WASM entry point is `dist/wasm.js`; its optional peer dependency must be available in the consuming project.
+A source checkout can be used by building it and importing `dist/index.js`, or by installing a tarball created with `pnpm pack --pack-destination /tmp/heic-pack`. The WASM entry point is `dist/wasm.js`; its optional peer dependency must be available in the consuming project.
 
 ## Repository map
 
@@ -81,3 +81,9 @@ Do not commit `dist/`, browser reports, `node_modules/`, or the private photo co
 ## Community expectations
 
 Be respectful, explain disagreements with evidence, and focus reviews on the work. Do not harass contributors or disclose private information. Report conduct concerns privately to hello@su.engineering. Use the [security policy](SECURITY.md) for vulnerabilities.
+
+## Releases
+
+Package changes use Changesets. Once merged into `master`, the release workflow
+creates a version/changelog PR. Merging that PR publishes its new version after
+validation using npm trusted publishing. See [the release guide](docs/releasing.md).

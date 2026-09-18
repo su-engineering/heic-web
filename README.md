@@ -15,17 +15,17 @@ HEIC uploads need not force every visitor to download a software codec. This Typ
 
 The project is at **0.1.0**. Test it with representative files and target devices before production use. The repository is named `heic-web`; the npm package name is `@su-engineering/heic`.
 
-[API reference](docs/api.md) · [Compatibility and limitations](docs/compatibility.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[API reference](docs/api.md) · [Compatibility and limitations](docs/compatibility.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Release process](docs/releasing.md)
 
 ## Installation
 
-When the package has been published to your registry:
+Install the package:
 
 ```sh
 npm install @su-engineering/heic
 ```
 
-For a checkout before publication, see [local development](CONTRIBUTING.md#local-development). Decoding runs in a browser or browser worker. Node.js can run the container parser, but this package does not provide a Node.js pixel decoder.
+For a source checkout, see [local development](CONTRIBUTING.md#local-development). Decoding runs in a browser or browser worker. Node.js can run the container parser, but this package does not provide a Node.js pixel decoder.
 
 ## Quick start
 
