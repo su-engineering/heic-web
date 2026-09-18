@@ -1,6 +1,6 @@
 {
   "name": "@su-engineering/heic",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Browser-first HEIC/HEIF decoder. Decodes Apple HEIC photos without unconditionally downloading a WebAssembly codec.",
   "license": "MIT",
   "type": "module",
