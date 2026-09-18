@@ -1,5 +1,5 @@
 /** Local browser benchmark. Photo bytes never leave the loopback server. */
-import { build } from 'esbuild';
+import { build, stop } from 'esbuild';
 import { chromium, firefox, webkit } from '@playwright/test';
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -157,4 +157,12 @@ try {
   mkdirSync(resolve(settings.output, '..'), { recursive: true });
   writeFileSync(settings.output, JSON.stringify(report, null, 2) + '\n');
   console.log(`Report: ${settings.output}`);
-} finally { if (browser) await browser.close(); await new Promise(resolve => server.close(resolve)); }
+} finally {
+  if (browser) await browser.close();
+  await new Promise(resolve => {
+    server.close(resolve);
+    server.closeAllConnections();
+  });
+  stop();
+  console.log('Benchmark complete; browser, server, and bundler stopped.');
+}
