@@ -40,6 +40,14 @@ await pending; // Rejects with HeicAbortError at a cancellation checkpoint.
 
 The decoder returns pixels, not a new HEIC file. EXIF and other source metadata are not serialized into a new output file. Warnings are advisory and do not enumerate every unsupported feature.
 
+## `convertHeic(input, options?)`
+
+Returns `Promise<ConvertedImage>` using the same inputs and decode options as `decodeHeic`. Adds `type: 'image/jpeg' | 'image/png'` (default JPEG) and `quality` (default `0.92`, a finite number from 0 to 1; ignored for PNG). Invalid type/quality values throw `TypeError`/`RangeError` before decoding.
+
+The result contains `blob` and all `DecodedImage` metadata except `image`. Dimensions describe the encoded image. Transforms and `maxDimension` apply before encoding. Its bitmap and conversion canvas are released on success, cancellation, or encoder failure; callers do not need `close()`. Revoke any object URLs you create when finished.
+
+Conversion uses `OffscreenCanvas.convertToBlob`, including in workers. Platform encoding errors can propagate. An empty Blob or unexpected MIME type throws `HeicDecodeError`. Cancellation is checked before and after encoding, but cannot interrupt an encoder already running. Quality and encoded bytes can differ across browsers. Source EXIF is not copied; full HDR and cross-browser color equivalence are not promised. The software fallback remains explicit through `wasmLoader` or adapter registration.
+
 ## `isHeic(input)`
 
 Returns `Promise<IsHeicResult>` with `isHeic: boolean` and optional `brand`, `primaryItemType`, and `coding` (`'hevc'`, `'av1'`, or `'unknown'`). Inspects at most the first 64 KiB, including for a `Blob`.
@@ -107,4 +115,4 @@ These functions do not decode pixels and accept `ArrayBuffer`/`Uint8Array` where
 | `parseHvcC`, `hvccToCodecString` | Parse HEVC configuration and produce a WebCodecs codec string. |
 | `hvccToAnnexBPrologue`, `lengthPrefixedToAnnexB` | Prepare HEVC NAL data for Annex B decoding. |
 
-Exported types include `BinaryInput`, `IsHeicResult`, `DecodeOptions`, `DecodedImage`, `Strategy`, `OutputColorSpace`, `SourceColor`, `TransformsApplied`, `HeicWarning`, `SupportReport`, `HeicErrorContext`, `DecoderAdapter`, `AdapterRequest`, `AdapterResult`, `HeifFile`, `ItemInfo`, `ItemLocation`, `ItemProperty`, `ItemProperties`, `ItemReferences`, `GridDescriptor`, `HvcC`, `ImagePlan`, `PlannedTile`, `TileGroup`, and `TransformOp`. The WASM entry point additionally exports `WasmAdapterOptions`.
+Exported types include `BinaryInput`, `IsHeicResult`, `DecodeOptions`, `DecodedImage`, `ConvertOptions`, `ConvertedImage`, `Strategy`, `OutputColorSpace`, `SourceColor`, `TransformsApplied`, `HeicWarning`, `SupportReport`, `HeicErrorContext`, `DecoderAdapter`, `AdapterRequest`, `AdapterResult`, `HeifFile`, `ItemInfo`, `ItemLocation`, `ItemProperty`, `ItemProperties`, `ItemReferences`, `GridDescriptor`, `HvcC`, `ImagePlan`, `PlannedTile`, `TileGroup`, and `TransformOp`. The WASM entry point additionally exports `WasmAdapterOptions`.

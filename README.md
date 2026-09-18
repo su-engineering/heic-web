@@ -15,7 +15,7 @@ HEIC uploads need not force every visitor to download a software codec. This Typ
 
 The project is at **0.1.0**. Test it with representative files and target devices before production use. The repository is named `heic-web`; the npm package name is `@su-engineering/heic`.
 
-[API reference](docs/api.md) · [Compatibility and limitations](docs/compatibility.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Release process](docs/releasing.md)
+[API reference](docs/api.md) · [Compatibility and limitations](docs/compatibility.md) · [Benchmarks](docs/benchmarks.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Release process](docs/releasing.md)
 
 ## Installation
 
@@ -83,7 +83,26 @@ const decoded = await decodeHeic(file, {
 
 The separate entry point loads `libheif-js/wasm-bundle.js` on its first decode. A bundler supporting dynamic imports can keep the adapter and codec out of the initial chunk. Check your bundler's output: asset splitting and download sizes depend on your toolchain and the libheif version.
 
-For self-hosted assets, custom builds, or direct browser imports, use [`createWasmAdapter`](docs/api.md#wasm-adapters). The core library is MIT licensed; optional libheif distributions have [their own licenses](docs/compatibility.md#third-party-code).
+The optional peer requires `libheif-js` 1.23.2 or newer within major version 1. For self-hosted assets, custom builds, or direct browser imports, use [`createWasmAdapter`](docs/api.md#wasm-adapters). The core library is MIT licensed; optional libheif distributions have [their own licenses](docs/compatibility.md#third-party-code).
+
+## Convert to JPEG or PNG
+
+```ts
+import { convertHeic } from '@su-engineering/heic';
+
+const converted = await convertHeic(file, {
+  type: 'image/jpeg', // Or 'image/png'; JPEG is the default.
+  quality: 0.92,      // 0–1 for JPEG; ignored for PNG.
+  maxDimension: 2048,
+  wasmLoader: async () => (await import('@su-engineering/heic/wasm')).wasmDecoder,
+});
+
+const form = new FormData();
+form.append('image', converted.blob, 'photo.jpg');
+console.log(converted.width, converted.height, converted.strategy, converted.warnings);
+```
+
+Install `libheif-js` for the fallback in this example. Omit `wasmLoader` if you only want browser decoding. Conversion runs in browsers and workers, releases its own bitmap, and does not copy source EXIF into the output. Browser encoders determine the final color and compression behavior.
 
 ## Choose by capability
 
@@ -103,6 +122,7 @@ HEVC support depends on the browser, OS, installed codecs, hardware, and file pr
 | Export | Purpose |
 | --- | --- |
 | `decodeHeic(input, options?)` | Decode a `Blob`, `File`, `ArrayBuffer`, or `Uint8Array` to an `ImageBitmap` plus metadata. |
+| `convertHeic(input, options?)` | Encode the primary image to a JPEG/PNG `Blob` plus decode metadata; releases its bitmap automatically. |
 | `isHeic(input)` | Inspect up to the first 64 KiB for HEIC identification and coding hints. |
 | `probeSupport()` | Probe native HEIC decoding and accepted WebCodecs HEVC configurations. |
 | `parseHeif(buffer)` | Inspect container items, properties, references, and locations without decoding pixels. |
@@ -113,7 +133,7 @@ Common decode options are `strategy`, `maxDimension`, `colorSpace`, `signal`, an
 
 ## Scope and limits
 
-This library returns pixels for the primary HEVC image. It does not encode HEIC, supply an upload UI, preserve EXIF in the output, or decode AVIF, animation, or Live Photo video. Recognized alpha, depth, and HDR gain-map auxiliary items produce warnings; warning coverage is not exhaustive.
+This library returns pixels or a JPEG/PNG conversion of the primary HEVC image. It does not encode HEIC, supply an upload UI, preserve EXIF in the output, or decode AVIF, animation, or Live Photo video. Recognized alpha, depth, and HDR gain-map auxiliary items produce warnings; warning coverage is not exhaustive.
 
 `maxDimension` reduces the returned bitmap size. **It does not cap peak decode memory:** decoding and compositing may still allocate the full-resolution image. Apply file-size limits, bound concurrent decodes, and use workers for large or untrusted uploads.
 

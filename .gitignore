@@ -11,3 +11,5 @@ test/fixtures/local/
 
 # Bundled public-API consumer used by browser integration tests.
 test/.consumer/
+test/.benchmark/
+benchmark-results/

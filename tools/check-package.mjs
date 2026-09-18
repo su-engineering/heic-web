@@ -21,6 +21,8 @@ assert.equal(typeof context.HeicDecoder.probeSupport, 'function');
 const core = await import('../dist/index.js');
 const fallback = await import('../dist/wasm.js');
 assert.equal(typeof core.decodeHeic, 'function');
+assert.equal(typeof core.convertHeic, 'function');
+assert.equal(typeof context.HeicDecoder.convertHeic, 'function');
 assert.equal(typeof fallback.createWasmAdapter, 'function');
 console.log(`Verified ${targets.size} package targets, ESM entry points, and browser global.`);
 
@@ -28,7 +30,7 @@ console.log(`Verified ${targets.size} package targets, ESM entry points, and bro
 // real browser bundler sees them, without shipping test assets in dist/.
 await build({
   stdin: {
-    contents: "export { decodeHeic } from '@su-engineering/heic'; export { wasmDecoder } from '@su-engineering/heic/wasm';",
+    contents: "export { decodeHeic, convertHeic } from '@su-engineering/heic'; export { wasmDecoder } from '@su-engineering/heic/wasm';",
     resolveDir: process.cwd(),
   },
   bundle: true,

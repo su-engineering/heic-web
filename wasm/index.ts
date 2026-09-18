@@ -20,10 +20,13 @@ interface LibheifImage {
   free?(): void;
 }
 interface LibheifDecoder {
+  /** Context allocated by libheif-js's decode method. */
+  decoder?: number | null;
   decode(buffer: Uint8Array | ArrayBuffer): LibheifImage[];
 }
 interface LibheifModule {
   HeifDecoder: new () => LibheifDecoder;
+  heif_context_free?: (context: number) => void;
 }
 
 export interface WasmAdapterOptions {
@@ -70,62 +73,73 @@ export function createWasmAdapter(options: WasmAdapterOptions = {}): DecoderAdap
       if (request.signal?.aborted) throw new HeicAbortError();
 
       const decoder = new libheif.HeifDecoder();
-      const images = decoder.decode(request.data);
-      if (!images || images.length === 0) {
-        throw new HeicDecodeError('libheif returned no images', { strategy: 'wasm' });
-      }
-
-      // Index 0 is the primary image; any others are aux or sequence entries,
-      // which v0.1 does not decode.
-      const image = images[0]!;
-      const width = image.get_width();
-      const height = image.get_height();
-      if (width <= 0 || height <= 0) {
-        throw new HeicDecodeError(`libheif reported ${width}x${height}`, { strategy: 'wasm' });
-      }
-
-      if (typeof OffscreenCanvas === 'undefined') {
-        throw new HeicDecodeError('OffscreenCanvas is required to receive libheif output', {
-          strategy: 'wasm',
-        });
-      }
-      const canvas = new OffscreenCanvas(width, height);
-      const ctx = canvas.getContext('2d', {
-        colorSpace: request.colorSpace,
-        alpha: false,
-      });
-      if (!ctx) {
-        throw new HeicDecodeError('Could not get a 2d context for libheif output', {
-          strategy: 'wasm',
-        });
-      }
-
-      const imageData = ctx.createImageData(width, height, { colorSpace: request.colorSpace });
-      await new Promise<void>((resolve, reject) => {
-        try {
-          image.display(imageData, (result) => {
-            if (!result) reject(new HeicDecodeError('libheif failed to render', { strategy: 'wasm' }));
-            else resolve();
-          });
-        } catch (error) {
-          reject(
-            new HeicDecodeError(`libheif threw while rendering: ${String(error)}`, {
-              strategy: 'wasm',
-            }),
-          );
+      let images: LibheifImage[] = [];
+      try {
+        images = decoder.decode(request.data);
+        if (!images || images.length === 0) {
+          throw new HeicDecodeError('libheif returned no images', { strategy: 'wasm' });
         }
-      });
 
-      image.free?.();
-      ctx.putImageData(imageData, 0, 0);
+        // Index 0 is the primary image; any others are aux or sequence entries,
+        // which v0.1 does not decode.
+        const image = images[0]!;
+        const width = image.get_width();
+        const height = image.get_height();
+        if (width <= 0 || height <= 0) {
+          throw new HeicDecodeError(`libheif reported ${width}x${height}`, { strategy: 'wasm' });
+        }
 
-      if (request.signal?.aborted) {
-        canvas.width = 0;
-        canvas.height = 0;
-        throw new HeicAbortError();
+        if (typeof OffscreenCanvas === 'undefined') {
+          throw new HeicDecodeError('OffscreenCanvas is required to receive libheif output', {
+            strategy: 'wasm',
+          });
+        }
+        const canvas = new OffscreenCanvas(width, height);
+        const ctx = canvas.getContext('2d', {
+          colorSpace: request.colorSpace,
+          alpha: false,
+        });
+        if (!ctx) {
+          throw new HeicDecodeError('Could not get a 2d context for libheif output', {
+            strategy: 'wasm',
+          });
+        }
+
+        const imageData = ctx.createImageData(width, height, { colorSpace: request.colorSpace });
+        await new Promise<void>((resolve, reject) => {
+          try {
+            image.display(imageData, (result) => {
+              if (!result) reject(new HeicDecodeError('libheif failed to render', { strategy: 'wasm' }));
+              else resolve();
+            });
+          } catch (error) {
+            reject(
+              new HeicDecodeError(`libheif threw while rendering: ${String(error)}`, {
+                strategy: 'wasm',
+              }),
+            );
+          }
+        });
+
+        ctx.putImageData(imageData, 0, 0);
+
+        if (request.signal?.aborted) {
+          canvas.width = 0;
+          canvas.height = 0;
+          throw new HeicAbortError();
+        }
+
+        return { image: canvas, width, height };
+      } finally {
+        // Each decode allocates a context. libheif-js only frees it on the next
+        // decode on the same instance; this adapter creates a fresh instance.
+        // Release every returned handle before its owning context, even on error.
+        for (const image of images ?? []) image.free?.();
+        if (decoder.decoder && libheif.heif_context_free) {
+          libheif.heif_context_free(decoder.decoder);
+          decoder.decoder = null;
+        }
       }
-
-      return { image: canvas, width, height };
     },
   };
 }
