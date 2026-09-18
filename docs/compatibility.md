@@ -40,7 +40,7 @@ Cancellation is cooperative. An `AbortSignal` is checked around parts of the pip
 
 - Unit tests cover parser behavior, bounds checks, HEVC configuration, and deterministic fixture mutations.
 - Browser tests exercise the public built package, software decoding, transforms, dimensions, and workers across Playwright engines.
-- Native and WebCodecs tests skip when capability probes fail. Headless Linux generally cannot validate platform HEVC decoding.
+- Native and WebCodecs tests skip when capability probes fail. Headless Linux generally cannot validate platform HEVC decoding; some WebKit builds accept limited profiles through software decoders. Tests query each fixture configuration.
 - The optional `chrome-hevc` project can exercise an installed browser with platform decoding. Released Safari still needs Apple-device testing.
 - Committed fixtures include a tiny single-image file and generated asymmetric transform variants. They do not provide a broad real-world Apple grid/device corpus. Private local fixtures improve local coverage but are absent from CI.
 

@@ -18,7 +18,7 @@ test.beforeEach(async ({ page }) => {
 
 for (const { url } of loadFixtures()) {
   test(`decoder frame size matches ispe for ${url.split('/').pop()}`, async ({ page }) => {
-    test.skip(!(await hasWebCodecsHevc(page)), 'WebCodecs path required');
+    test.skip(!(await hasWebCodecsHevc(page, url)), 'WebCodecs path required');
 
     const result = await page.evaluate(async (fixtureUrl) => {
       const bytes = new Uint8Array(await (await fetch(fixtureUrl)).arrayBuffer());

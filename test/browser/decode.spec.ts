@@ -92,7 +92,7 @@ test.describe('isHeic', () => {
 test.describe('decode', () => {
   for (const fixture of loadFixtures()) {
     test(`decodes ${fixture.name} (${fixture.device})`, async ({ page }) => {
-      const supported = (await hasWebCodecsHevc(page)) || (await hasNative(page));
+      const supported = (await hasWebCodecsHevc(page, fixture.url)) || (await hasNative(page, fixture.url));
       test.skip(
         !supported,
         'no native or WebCodecs HEVC decode in this browser; the wasm path is covered separately',

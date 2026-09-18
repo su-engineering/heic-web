@@ -48,10 +48,9 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: pnpm test:browser
 
-      # Headless Linux browsers have no platform HEVC decoder, so the WebCodecs
-      # strategy does not run here and its tests skip themselves. What this job
-      # actually covers is the container parser and the wasm fallback, on all
-      # three engines.
+      # Headless Linux generally lacks platform HEVC decoding. Some WebKit
+      # builds accept limited HEVC profiles. Tests check each fixture config;
+      # software fallback tests run unconditionally on all three engines.
       #
       # A green badge on this workflow does NOT mean the primary decode path is
       # tested. That needs a real device matrix — see the chrome-hevc project in
@@ -59,7 +58,7 @@ jobs:
       #   HEIC_CHROME="/path/to/chrome" pnpm test:browser --project=chrome-hevc
       - name: Note on coverage
         run: |
-          echo "::notice::WebCodecs HEVC does not run in headless CI. This job covers the parser and the wasm path only."
+          echo "::notice::Platform HEVC needs device testing. CI covers parser/WASM paths and any fixture-specific WebCodecs configurations accepted by its browsers."
 
       - uses: actions/upload-artifact@v4
         if: failure()

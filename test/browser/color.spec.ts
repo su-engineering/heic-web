@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { hasNative, hasWebCodecsHevc, loadFixtures, openHarness } from './support.ts';
+import { hasWebCodecsHevc, loadFixtures, openHarness } from './support.ts';
 
 test.beforeEach(async ({ page }) => {
   await openHarness(page);
@@ -14,13 +14,12 @@ test.beforeEach(async ({ page }) => {
  * So the source characteristics are reported and the output space is an option.
  */
 test('reports the source colour characteristics', async ({ page }) => {
-  test.skip(!(await hasWebCodecsHevc(page)) && !(await hasNative(page)), 'no decode path');
 
   const fixtureUrls = loadFixtures().map((fixture) => fixture.url);
   const results = await page.evaluate(async (urls) => {
     const read = async (url: string) => {
       const blob = await (await fetch(url)).blob();
-      const decoded = await window.heic.decodeHeic(blob);
+      const decoded = await window.heic.decodeHeic(blob, { strategy: 'wasm', wasmLoader: async () => window.wasmAdapter() });
       const summary = { color: decoded.sourceColor, bitDepth: decoded.bitDepth };
       decoded.image.close();
       return summary;

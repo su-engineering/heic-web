@@ -39,7 +39,7 @@ test.describe('cross-strategy consistency', () => {
   for (const fixture of loadFixtures()) {
     test(`${fixture.name}: WebCodecs and wasm agree`, async ({ page }) => {
       test.skip(
-        !(await hasWebCodecsHevc(page)),
+        !(await hasWebCodecsHevc(page, fixture.url)),
         'needs the WebCodecs path to compare against',
       );
 
