@@ -51,7 +51,10 @@
     "webcodecs",
     "image",
     "browser",
-    "iphone"
+    "iphone",
+    "conversion",
+    "jpeg",
+    "png"
   ],
   "devDependencies": {
     "@changesets/cli": "^2.27.10",

@@ -11,8 +11,8 @@ import { execFileSync } from 'node:child_process';
 
 let source = { commit: null, dirty: null };
 try {
-  source = { commit: execFileSync('rtk', ['git', 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-    dirty: execFileSync('rtk', ['git', 'status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0 };
+  source = { commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+    dirty: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0 };
 } catch { /* The harness also works in a source snapshot without .git. */ }
 
 const args = process.argv.slice(2).filter(arg => arg !== '--');
@@ -75,24 +75,27 @@ async function prepare(context, fixtureIndex) {
   return page;
 }
 async function run(page, variant) {
-  return page.evaluate(async ({ variant, options }) => {
-    const started = performance.now();
-    const api = await import(`/assets/${variant.entry}/entry.js`);
-    const result = await api.convert(window.input, options, variant.strategy);
-    const ms = performance.now() - started;
-    // Validate every output outside the measured region, then release it.
-    if (result.blob.type !== options.type || !result.blob.size) throw new Error('Invalid encoded output');
-    const bitmap = await createImageBitmap(result.blob);
-    const canvas = new OffscreenCanvas(64, 64);
-    const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
-    ctx.drawImage(bitmap, 0, 0, 64, 64);
-    const pixels = Array.from(ctx.getImageData(0, 0, 64, 64).data);
-    const summary = { ms, strategy: result.strategy, width: bitmap.width, height: bitmap.height,
-      outputBytes: result.blob.size, pixels,
-      loadedJsBytes: performance.getEntriesByType('resource').filter(e => e.name.includes('/assets/')).reduce((sum, e) => sum + e.decodedBodySize, 0) };
-    bitmap.close(); canvas.width = 0; canvas.height = 0;
-    return summary;
-  }, { variant, options: { type: settings.type, quality: settings.quality } });
+  const timeout = setTimeout(() => { void page.close().catch(() => {}); }, 120000);
+  try {
+    return await page.evaluate(async ({ variant, options }) => {
+      const started = performance.now();
+      const api = await import(`/assets/${variant.entry}/entry.js`);
+      const result = await api.convert(window.input, options, variant.strategy);
+      const ms = performance.now() - started;
+      // Validate every output outside the measured region, then release it.
+      if (result.blob.type !== options.type || !result.blob.size) throw new Error('Invalid encoded output');
+      const bitmap = await createImageBitmap(result.blob);
+      const canvas = new OffscreenCanvas(64, 64);
+      const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+      ctx.drawImage(bitmap, 0, 0, 64, 64);
+      const pixels = Array.from(ctx.getImageData(0, 0, 64, 64).data);
+      const summary = { ms, strategy: result.strategy, width: bitmap.width, height: bitmap.height,
+        outputBytes: result.blob.size, pixels,
+        loadedJsBytes: performance.getEntriesByType('resource').filter(e => e.name.includes('/assets/')).reduce((sum, e) => sum + e.decodedBodySize, 0) };
+      bitmap.close(); canvas.width = 0; canvas.height = 0;
+      return summary;
+    }, { variant, options: { type: settings.type, quality: settings.quality } });
+  } finally { clearTimeout(timeout); }
 }
 try {
   browser = await ({ chromium, firefox, webkit })[settings.browser].launch({

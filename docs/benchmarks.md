@@ -48,6 +48,15 @@ September 18, 2026 conversion candidate, Linux x64, AMD Ryzen 7 PRO 8840U, Playw
 
 Both `ours-auto` runs used **WASM**, not native/WebCodecs. Forced WASM warm medians were 362/475 ms. All outputs matched full-resolution dimensions; their 64×64 RGB thumbnail MAD against heic-to was zero in this browser. This is a narrow local result using private inputs, not an independently reproducible public corpus or a general performance guarantee. The harness is reproducible with the committed fixtures or your own photos.
 
+An isolated Firefox 155 run on the same machine used three cold and five warm samples per variant, with the same photos and JPEG settings:
+
+| Input | ours-auto cold | heic-to cold | ours-auto warm | heic-to warm |
+| --- | ---: | ---: | ---: | ---: |
+| Photo 1 | 493 ms | 1,076 ms | 402 ms | 894 ms |
+| Photo 2 | 607 ms | 1,350 ms | 518 ms | 1,117 ms |
+
+These auto runs also used WASM; output dimensions matched and thumbnail RGB MAD was zero. Raw/gzip core size is reported separately from codec assets. In this bundled harness, our WASM path loaded approximately 2.02 MB of uncompressed JavaScript versus 3.00 MB for heic-to; production transfer sizes depend on bundling and compression.
+
 ## Interpretation
 
 Our fallback stays unloaded when native or WebCodecs succeeds. `ours-auto` reports the actual successful strategy so a fallback result cannot be presented as a native/hardware speedup. Without platform HEVC, this compares software WASM against heic-to's bundled software implementation.
