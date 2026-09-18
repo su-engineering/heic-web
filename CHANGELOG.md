@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Patch Changes
+
+- 395b783: Document the initial public release and the automated Changesets release process with npm trusted publishing.
+
 ## 0.1.0
 
 Initial public release.
