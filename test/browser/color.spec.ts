@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { hasNative, hasWebCodecsHevc, openHarness } from './support.ts';
+import { hasNative, hasWebCodecsHevc, loadFixtures, openHarness } from './support.ts';
 
 test.beforeEach(async ({ page }) => {
   await openHarness(page);
@@ -16,7 +16,8 @@ test.beforeEach(async ({ page }) => {
 test('reports the source colour characteristics', async ({ page }) => {
   test.skip(!(await hasWebCodecsHevc(page)) && !(await hasNative(page)), 'no decode path');
 
-  const results = await page.evaluate(async () => {
+  const fixtureUrls = loadFixtures().map((fixture) => fixture.url);
+  const results = await page.evaluate(async (urls) => {
     const read = async (url: string) => {
       const blob = await (await fetch(url)).blob();
       const decoded = await window.heic.decodeHeic(blob);
@@ -24,29 +25,25 @@ test('reports the source colour characteristics', async ({ page }) => {
       decoded.image.close();
       return summary;
     };
-    return {
-      // An Apple photo carrying a full ICC profile.
-      apple: await read('/test/fixtures/local/IMG_0679.HEIC'),
-      // A libheif-encoded file carrying CICP values instead.
-      libheif: await read('/test/fixtures/generated/asym-base.heic'),
-    };
-  });
+    return Promise.all(urls.map(read));
+  }, fixtureUrls);
 
-  expect(results.apple.color?.type).toBe('icc');
-  if (results.apple.color?.type === 'icc') {
-    expect(results.apple.color.profile.byteLength).toBeGreaterThan(100);
+  for (const result of results) {
+    if (result.color?.type === 'icc') {
+      expect(result.color.profile.byteLength).toBeGreaterThan(100);
+    }
   }
-
-  expect(results.libheif.color?.type).toBe('nclx');
-  if (results.libheif.color?.type === 'nclx') {
+  const libheif = results[fixtureUrls.indexOf('/test/fixtures/generated/asym-base.heic')]!;
+  expect(libheif.color?.type).toBe('nclx');
+  if (libheif.color?.type === 'nclx') {
     // CICP: primaries, transfer and matrix are reported raw so a caller can
     // decide what they mean rather than being handed our interpretation.
-    expect(typeof results.libheif.color.primaries).toBe('number');
-    expect(typeof results.libheif.color.transfer).toBe('number');
-    expect(typeof results.libheif.color.fullRange).toBe('boolean');
+    expect(typeof libheif.color.primaries).toBe('number');
+    expect(typeof libheif.color.transfer).toBe('number');
+    expect(typeof libheif.color.fullRange).toBe('boolean');
   }
   // The generated fixtures are 10-bit, which is what pixi reports.
-  expect(results.libheif.bitDepth).toBe(10);
+  expect(libheif.bitDepth).toBe(10);
 });
 
 test('composites in display-p3 when asked', async ({ page }) => {

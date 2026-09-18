@@ -117,3 +117,47 @@ test.describe('wasm strategy', () => {
     expect(outcome.loaderCalled).toBe(false);
   });
 });
+
+
+test('default WASM adapter decodes through a bundled consumer', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    // Built by test:package; this uses the documented default import, rather
+    // than the harness's custom ESM loader.
+    const url = '/test/.consumer/stdin.js';
+    const consumer = await import(/* @vite-ignore */ url);
+    const file = await (await fetch('/test/fixtures/generated/asym-irot-90.heic')).blob();
+    const decoded = await consumer.decodeHeic(file, {
+      strategy: 'wasm',
+      wasmLoader: async () => consumer.wasmDecoder,
+      maxDimension: 160,
+    });
+    const summary = {
+      width: decoded.width, height: decoded.height,
+      sourceWidth: decoded.sourceWidth, sourceHeight: decoded.sourceHeight,
+      strategy: decoded.strategy,
+    };
+    decoded.image.close();
+    return summary;
+  });
+  expect(result).toEqual({ width: 107, height: 160, sourceWidth: 320, sourceHeight: 480, strategy: 'wasm' });
+});
+
+test('WASM decoding works in a dedicated worker', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const worker = new Worker('/test/browser/decode-worker.js', { type: 'module' });
+    try {
+      return await new Promise<Record<string, unknown>>((resolve, reject) => {
+        worker.onmessage = (event) => resolve(event.data);
+        worker.onerror = (event) => reject(new Error(event.message));
+        worker.postMessage({ url: '/test/fixtures/generated/asym-irot-270.heic', strategy: 'wasm' });
+      });
+    } finally {
+      worker.terminate();
+    }
+  });
+  expect(result.ok, String(result.error)).toBe(true);
+  expect(result.strategy).toBe('wasm');
+  expect(result.width).toBe(320);
+  expect(result.height).toBe(480);
+  expect(result.rotation).toBe(270);
+});

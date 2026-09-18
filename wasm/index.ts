@@ -28,7 +28,7 @@ interface LibheifModule {
 
 export interface WasmAdapterOptions {
   /**
-   * Supplies the libheif module. Defaults to `import('libheif-js')`.
+   * Supplies the libheif module. Defaults to `import('libheif-js/wasm-bundle.js')`.
    *
    * Override it to pin a specific build, to serve the wasm from your own origin,
    * or to reuse an instance you already loaded. In a browser without a bundler,
@@ -49,7 +49,7 @@ export interface WasmAdapterOptions {
  * The module is loaded once, on first decode, and reused.
  */
 export function createWasmAdapter(options: WasmAdapterOptions = {}): DecoderAdapter {
-  const load = options.loadLibheif ?? ((): Promise<unknown> => import('libheif-js'));
+  const load = options.loadLibheif ?? ((): Promise<unknown> => import('libheif-js/wasm-bundle.js'));
 
   let modulePromise: Promise<LibheifModule> | undefined;
 

@@ -4,7 +4,7 @@
  * either way; the structural interfaces the adapter actually relies on are
  * declared in index.ts next to the code that uses them.
  */
-declare module 'libheif-js' {
+declare module 'libheif-js/wasm-bundle.js' {
   const libheif: unknown;
   export default libheif;
 }

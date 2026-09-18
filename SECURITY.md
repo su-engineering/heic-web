@@ -16,17 +16,18 @@ for anything that looks exploitable until a fix is out.
 
 ## Threat model
 
-The input is hostile. The attacker controls every byte of the file, and the
-attack surface is the container parser, not the codec — the actual HEVC decoding
-is done by the browser or by libheif.
+The input is hostile. The attacker controls every byte of the file. The attack
+surface includes container parsing, decode planning, rendering, and the selected
+browser or optional libheif codec. Upstream codecs are outside this repository,
+but reports that help isolate a problem are welcome.
 
-What the parser guarantees:
+The parser and planner enforce these checks:
 
-- **Every read is bounds-checked.** All byte access goes through one `Reader`
-  class, which validates against its window before touching the buffer. Nothing
-  else in the package indexes raw bytes, so this is enforceable by review.
+- **Binary reads are bounds-checked.** The `Reader` class validates its window
+  before accessing the buffer. Specialized payload and codec parsers also use
+  explicit bounds checks.
 - **Box nesting is capped** at 32, and the number of sibling boxes at one level
-  at 65,536. A file cannot make the walker recurse or spin.
+  at 65,536. These bound the box walker's recursion and sibling iteration.
 - **No allocation on a declared size** without validating it against the real
   buffer first. A malformed `extent_length` cannot trigger a 4 GB allocation; a
   64-bit box size above `Number.MAX_SAFE_INTEGER` is rejected rather than
@@ -43,8 +44,9 @@ What the parser guarantees:
 What it does not defend against:
 
 - Bugs in the browser's own HEVC decoder or in libheif. Those are upstream.
-- Resource exhaustion from a legitimately enormous but valid image, beyond the
-  caps above. Use `maxDimension` if you are decoding files you did not choose.
+- Resource exhaustion from a large valid image within the caps above.
+  `maxDimension` scales the final result and does not cap peak decode memory.
+  Enforce application input/dimension limits and bound concurrent decodes.
 
 ## This is a client-side decoder
 
@@ -57,5 +59,12 @@ cleanly in a browser can still be crafted to attack whatever handles it next.
 The parser is fuzzed against mutated real-world files on every run: byte flips,
 truncation, hostile 32-bit size and count fields, zeroed runs, and spliced
 regions. Every case must produce a typed `HeicError` rather than a crash, and
-every case is time-boxed, because a hang is a denial of service on the user's own
-tab and is treated as a worse bug than a crash.
+completed cases are checked against an elapsed-time budget. This synchronous
+fuzzer does not interrupt an infinite loop; process-level CI timeouts remain
+necessary.
+
+## Supported versions
+
+Security fixes target the latest released version. There is currently no
+long-term support commitment for older releases. Use current browser and
+optional codec versions, and update when a security fix is released.

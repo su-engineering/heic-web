@@ -8,6 +8,7 @@
  * creeps in, this file is where it surfaces.
  */
 import { decodeHeic, isHeic, probeSupport } from '/dist/index.js';
+import { createWasmAdapter } from '/dist/wasm.js';
 
 self.onmessage = async (event) => {
   try {
@@ -16,7 +17,12 @@ self.onmessage = async (event) => {
 
     const detection = await isHeic(blob);
     const report = await probeSupport();
-    const decoded = await decodeHeic(blob, { strategy: event.data.strategy });
+    const decoded = await decodeHeic(blob, {
+      strategy: event.data.strategy,
+      wasmLoader: async () => createWasmAdapter({
+        loadLibheif: () => import('/node_modules/libheif-js/libheif-wasm/libheif-bundle.mjs'),
+      }),
+    });
 
     self.postMessage({
       ok: true,

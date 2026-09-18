@@ -8,3 +8,6 @@ playwright-report/
 # Personal photo corpus used for local development. The committed fixtures under
 # test/fixtures/ are the ones CI runs against; see test/fixtures/README.md.
 test/fixtures/local/
+
+# Bundled public-API consumer used by browser integration tests.
+test/.consumer/
