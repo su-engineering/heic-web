@@ -20,7 +20,7 @@ Do not infer support from a browser name or version alone. Platform codecs, hard
 
 Supported primary items are HEVC `hvc1`/`hev1` images and supported HEVC tiled grids. Container `irot`, `imir`, and valid `clap` transforms are planned; native/libheif paths are expected to apply those themselves. Unsupported essential properties cause an error.
 
-The library decodes one primary image. Recognized alpha, depth/disparity, and HDR gain-map auxiliary items can generate warnings but are not composited. It does not decode AVIF/AV1, arbitrary derived-image types, animation, image sequences, Live Photo motion, or all HEIF extensions. Sequence and motion features are not exhaustively detected, so no warning does not establish their absence.
+The library decodes one primary image, or its embedded `thmb` thumbnail through `decodeHeicThumbnail`. Recognized alpha, depth/disparity, and HDR gain-map auxiliary items can generate warnings but are not composited. It does not decode AVIF/AV1, arbitrary derived-image types, animation, image sequences, Live Photo motion, or all HEIF extensions. Sequence and motion features are not exhaustively detected, so no warning does not establish their absence.
 
 ## Color and HDR
 
@@ -42,7 +42,7 @@ Cancellation is cooperative. An `AbortSignal` is checked around parts of the pip
 - Browser tests exercise the public built package, software decoding, transforms, dimensions, and workers across Playwright engines.
 - Native and WebCodecs tests skip when capability probes fail. Headless Linux generally cannot validate platform HEVC decoding; some WebKit builds accept limited profiles through software decoders. Tests query each fixture configuration.
 - The optional `chrome-hevc` project can exercise an installed browser with platform decoding. Released Safari still needs Apple-device testing.
-- Committed fixtures include a tiny single-image file and generated asymmetric transform variants. They do not provide a broad real-world Apple grid/device corpus. Private local fixtures improve local coverage but are absent from CI.
+- Committed fixtures include a tiny single-image file, generated asymmetric transform variants, and a generated file with EXIF (synthetic GPS, Orientation) and an embedded thumbnail, the way an iPhone writes them. They do not provide a broad real-world Apple grid/device corpus. Private local fixtures improve local coverage but are absent from CI.
 
 A green CI run establishes only the tests that executed. Review skips and the input corpus before making support claims. See [fixture documentation](https://github.com/su-engineering/heic-web/blob/master/test/fixtures/README.md).
 

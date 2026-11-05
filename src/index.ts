@@ -3,7 +3,9 @@ import { HeicAbortError, HeicDecodeError, HeicUnsupportedError } from './errors.
 import { decodeNative } from './decoders/native.ts';
 import { decodeWithWebCodecs, isWebCodecsAvailable } from './decoders/webcodecs.ts';
 import { DETECTION_PREFIX_BYTES, detectFromBuffer } from './parser/detect.ts';
-import { planDecode, type ImagePlan } from './plan.ts';
+import { extractExifTiff, insertJpegExif, prepareExifForOutput } from './parser/exif.ts';
+import { parseHeif } from './parser/meta.ts';
+import { findThumbnailItemId, planDecode, planItem, type ImagePlan } from './plan.ts';
 import { createCanvas, throwIfAborted } from './render/canvas.ts';
 import { applyTransforms, summarizeTransforms } from './render/transform.ts';
 import type {
@@ -12,7 +14,11 @@ import type {
   ConvertedImage,
   DecodedImage,
   DecoderAdapter,
+  ExifMode,
+  HeicWarning,
   Strategy,
+  ThumbnailImage,
+  ThumbnailOptions,
   TransformsApplied,
 } from './types.ts';
 
@@ -42,7 +48,7 @@ export {
   parseHvcC,
 } from './parser/hvcc.ts';
 export type { HvcC } from './parser/hvcc.ts';
-export { planDecode } from './plan.ts';
+export { findThumbnailItemId, planDecode, planItem } from './plan.ts';
 export type { ImagePlan, PlannedTile, TileGroup, TransformOp } from './plan.ts';
 export { probeSupport } from './probe.ts';
 export type {
@@ -53,11 +59,14 @@ export type {
   ConvertedImage,
   DecodedImage,
   DecoderAdapter,
+  ExifMode,
   HeicWarning,
   OutputColorSpace,
   SourceColor,
   Strategy,
   SupportReport,
+  ThumbnailImage,
+  ThumbnailOptions,
   TransformsApplied,
 } from './types.ts';
 
@@ -208,23 +217,35 @@ export async function decodeHeic(
   });
 }
 
+const EXIF_MODES: readonly ExifMode[] = ['none', 'all', 'no-location'];
+
 /**
  * Convert the primary HEIC image to JPEG or PNG using the browser's encoder.
  * Uses the same explicit decode cascade as decodeHeic and releases all pixels.
- * Source EXIF is not copied into the output file.
+ *
+ * Source EXIF is dropped unless `exif` asks for it (JPEG only). When it is
+ * written, Orientation is reset to 1 and the pixel dimensions are updated, since
+ * the output pixels are already upright.
  */
 export async function convertHeic(
   input: BinaryInput,
   options: ConvertOptions = {},
 ): Promise<ConvertedImage> {
-  const { type = 'image/jpeg', quality = 0.92, ...decodeOptions } = options;
+  const { type = 'image/jpeg', quality = 0.92, exif = 'none', ...decodeOptions } = options;
   if (type !== 'image/jpeg' && type !== 'image/png') {
     throw new TypeError('type must be image/jpeg or image/png');
   }
   if (!Number.isFinite(quality) || quality < 0 || quality > 1) {
     throw new RangeError('quality must be a finite number between 0 and 1');
   }
-  const decoded = await decodeHeic(input, decodeOptions);
+  if (!EXIF_MODES.includes(exif)) {
+    throw new TypeError("exif must be 'none', 'all' or 'no-location'");
+  }
+  if (exif !== 'none' && type !== 'image/jpeg') {
+    throw new TypeError('exif can only be written to image/jpeg output');
+  }
+  const bytes = await readAll(input);
+  const decoded = await decodeHeic(bytes, decodeOptions);
   let canvas: OffscreenCanvas | undefined;
   try {
     throwIfAborted(options.signal);
@@ -232,13 +253,25 @@ export async function convertHeic(
     const ctx = canvas.getContext('2d', { colorSpace: options.colorSpace ?? 'srgb', alpha: false });
     if (!ctx) throw new HeicDecodeError('Could not get a 2d context for conversion', {});
     ctx.drawImage(decoded.image, 0, 0);
-    const blob = await canvas.convertToBlob({ type, quality });
+    let blob = await canvas.convertToBlob({ type, quality });
     throwIfAborted(options.signal);
     if (blob.type !== type || blob.size === 0) {
       throw new HeicDecodeError(`Browser could not encode ${type}`, {});
     }
+
     const { image: _image, ...metadata } = decoded;
-    return { ...metadata, blob };
+    const warnings: HeicWarning[] = [...metadata.warnings];
+    let written: ExifMode = 'none';
+    if (exif !== 'none') {
+      const embedded = await embedExif(blob, bytes, exif, decoded.width, decoded.height);
+      if (embedded.blob) {
+        blob = embedded.blob;
+        written = exif;
+      } else {
+        warnings.push(embedded.warning);
+      }
+    }
+    return { ...metadata, warnings, exif: written, blob };
   } finally {
     decoded.image.close();
     if (canvas) {
@@ -246,6 +279,111 @@ export async function convertHeic(
       canvas.height = 0;
     }
   }
+}
+
+async function embedExif(
+  jpeg: Blob,
+  source: Uint8Array,
+  mode: Exclude<ExifMode, 'none'>,
+  width: number,
+  height: number,
+): Promise<{ blob: Blob; warning?: never } | { blob?: never; warning: HeicWarning }> {
+  const tiff = extractExifTiff(parseHeif(source));
+  if (!tiff) {
+    return { warning: { code: 'exif-missing', message: 'The source has no EXIF block to copy' } };
+  }
+  const prepared = prepareExifForOutput(tiff, { width, height, stripLocation: mode === 'no-location' });
+  const merged = prepared && insertJpegExif(new Uint8Array(await jpeg.arrayBuffer()), prepared);
+  if (!merged) {
+    return {
+      warning: {
+        code: 'exif-not-written',
+        message: prepared
+          ? 'The EXIF block does not fit in a JPEG APP1 segment; written without EXIF'
+          : 'The source EXIF block is malformed; written without EXIF',
+      },
+    };
+  }
+  return { blob: new Blob([merged as Uint8Array<ArrayBuffer>], { type: 'image/jpeg' }) };
+}
+
+/**
+ * The primary image's raw EXIF as a TIFF block ("II*\0" or "MM\0*" onwards),
+ * or `null` when the file has none. Hand it to an EXIF parser such as exifr.
+ *
+ * This is the metadata exactly as stored: Orientation there describes the coded
+ * pixels, which `decodeHeic` has already rotated.
+ */
+export async function readExif(input: BinaryInput): Promise<Uint8Array | null> {
+  return extractExifTiff(parseHeif(await readAll(input))) ?? null;
+}
+
+/** Longest side used when there is no thumbnail to size the fallback after. */
+const DEFAULT_THUMBNAIL_SIZE = 320;
+
+/**
+ * Decodes a small preview: the embedded thumbnail when the file has one, which
+ * is a ~320 px HEVC frame and far cheaper than the full grid.
+ *
+ * The embedded thumbnail is decoded with WebCodecs. When there is none, or it
+ * cannot be decoded, the primary image is decoded through the normal cascade and
+ * downscaled (see `fallback`). `embedded` says which happened.
+ */
+export async function decodeHeicThumbnail(
+  input: BinaryInput,
+  options: ThumbnailOptions = {},
+): Promise<ThumbnailImage> {
+  const { fallback = 'primary', strategy = 'auto', colorSpace = 'srgb', maxDimension, signal } =
+    options;
+  throwIfAborted(signal);
+  const bytes = await readAll(input);
+  throwIfAborted(signal);
+
+  const file = parseHeif(bytes);
+  const thumbnailId = findThumbnailItemId(file, file.primaryItemId);
+  const attempts: { strategy: string; reason: string }[] = [];
+  let thumbnailPlan: ImagePlan | undefined;
+  if (thumbnailId !== undefined) {
+    try {
+      thumbnailPlan = planItem(file, thumbnailId);
+    } catch (error) {
+      attempts.push({ strategy: 'webcodecs', reason: describeError(error) });
+    }
+  }
+
+  if (thumbnailPlan && (strategy === 'auto' || strategy === 'webcodecs')) {
+    try {
+      const plan = thumbnailPlan;
+      if (!isWebCodecsAvailable()) throw new Error('VideoDecoder is not available');
+      const composited = await decodeWithWebCodecs(plan, colorSpace, signal);
+      const { canvas, applied } = applyTransforms(composited, plan.transforms, colorSpace);
+      const bitmap = await canvasToBitmap(canvas, maxDimension, signal);
+      return { ...describe(plan, bitmap, 'webcodecs', applied), embedded: true };
+    } catch (error) {
+      if (error instanceof HeicAbortError) throw error;
+      attempts.push({ strategy: 'webcodecs', reason: describeError(error) });
+    }
+  }
+
+  if (fallback === 'none') {
+    throw new HeicUnsupportedError(
+      thumbnailId === undefined
+        ? 'This HEIC has no embedded thumbnail'
+        : 'The embedded thumbnail could not be decoded',
+      attempts,
+      { brand: file.majorBrand, itemId: thumbnailId ?? file.primaryItemId },
+    );
+  }
+
+  const decoded = await decodeHeic(bytes, {
+    ...options,
+    maxDimension:
+      maxDimension ??
+      (thumbnailPlan
+        ? Math.max(thumbnailPlan.displayWidth, thumbnailPlan.displayHeight)
+        : DEFAULT_THUMBNAIL_SIZE),
+  });
+  return { ...decoded, embedded: false };
 }
 
 // ---------------------------------------------------------------------------
