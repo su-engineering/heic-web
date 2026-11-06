@@ -39,6 +39,8 @@ export interface HeicWarning {
     | 'gain-map-ignored'
     | 'sequence-ignored'
     | 'thumbnail-ignored'
+    | 'exif-missing'
+    | 'exif-not-written'
     | 'grid-dimension-mismatch'
     | 'mixed-tile-configs'
     | 'unknown-property';
@@ -86,16 +88,49 @@ export interface DecodedImage {
   warnings: HeicWarning[];
 }
 
+/**
+ * What EXIF to carry into a converted JPEG.
+ *
+ * - `'none'`: no EXIF. The default, so location never leaves the device by accident.
+ * - `'all'`: the source EXIF, including GPS.
+ * - `'no-location'`: the source EXIF with the GPS block removed and its bytes zeroed.
+ *
+ * Either way Orientation is rewritten to 1 and the pixel dimensions to the
+ * output size, because the pixels are already upright.
+ */
+export type ExifMode = 'none' | 'all' | 'no-location';
+
 export interface ConvertOptions extends DecodeOptions {
   /** Output format. Default 'image/jpeg'. */
   type?: 'image/jpeg' | 'image/png';
   /** JPEG encoder quality, from 0 to 1. Default 0.92; ignored for PNG. */
   quality?: number;
+  /** EXIF to embed. JPEG only. Default 'none'. */
+  exif?: ExifMode;
 }
 
 /** Encoded pixels and decode metadata; no bitmap needs to be closed by the caller. */
 export interface ConvertedImage extends Omit<DecodedImage, 'image'> {
   blob: Blob;
+  /** The EXIF actually written: `'none'` when not requested, absent from the source, or unwritable. */
+  exif: ExifMode;
+}
+
+export interface ThumbnailOptions extends DecodeOptions {
+  /**
+   * What to do when the file has no decodable embedded thumbnail. Recent iPhones
+   * often omit it.
+   *
+   * - `'primary'` (default): decode the full image downscaled to `maxDimension`,
+   *   or to the size the thumbnail would have had (320 px when there is none).
+   * - `'none'`: throw `HeicUnsupportedError`.
+   */
+  fallback?: 'primary' | 'none';
+}
+
+export interface ThumbnailImage extends DecodedImage {
+  /** True when the pixels came from the embedded thumbnail rather than the primary image. */
+  embedded: boolean;
 }
 
 export interface SupportReport {

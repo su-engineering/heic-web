@@ -31,6 +31,11 @@ specifically to settle it by measurement. See the note in
 
 These are 10-bit, which also covers the 10-bit path.
 
+`exif-thumb.heic` is the exception: 8-bit, encoded from a JPEG carrying EXIF
+(synthetic GPS position, Orientation 6), with a 96 px embedded thumbnail.
+`heif-enc` turns the Orientation into `irot` and leaves the EXIF tag in place,
+which is what an iPhone does, so it covers EXIF carry-over and thumbnails.
+
 ## `test/fixtures/local/` — gitignored
 
 A personal photo corpus. **Not committed**, because these are real photographs of

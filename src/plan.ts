@@ -71,9 +71,19 @@ export interface ImagePlan {
  */
 export function planDecode(input: ArrayBuffer | Uint8Array): ImagePlan {
   const file = parseHeif(input);
+  return planItem(file, file.primaryItemId);
+}
+
+/**
+ * Plans the decode of any image item in an already-parsed file. `planDecode`
+ * is this applied to the primary item; the thumbnail path applies it to the
+ * `thmb` item. Feature warnings (alpha, depth, gain map) are only collected for
+ * the primary item, since that is what they describe.
+ */
+export function planItem(file: HeifFile, itemId: number): ImagePlan {
   const warnings: HeicWarning[] = [];
 
-  const primaryItemId = file.primaryItemId;
+  const primaryItemId = itemId;
   const info = file.items.get(primaryItemId);
   if (!info) {
     throw new HeicParseError(`Primary item ${primaryItemId} is not described by iinf`, {
@@ -163,7 +173,7 @@ export function planDecode(input: ArrayBuffer | Uint8Array): ImagePlan {
   const bitDepth =
     pixi?.bitsPerChannel[0] ?? hvccBitDepth(tileGroups[0]!.hvcc);
 
-  collectFeatureWarnings(file, primaryItemId, warnings);
+  if (primaryItemId === file.primaryItemId) collectFeatureWarnings(file, primaryItemId, warnings);
 
   return {
     file,
@@ -404,6 +414,30 @@ function collectFeatureWarnings(
       break;
     }
   }
+}
+
+/**
+ * Item ID of the embedded thumbnail for `itemId`, linked by a `thmb` reference.
+ * When several exist, the largest that is still an HEVC image wins.
+ */
+export function findThumbnailItemId(file: HeifFile, itemId: number): number | undefined {
+  const thmb = file.references.get('thmb');
+  if (!thmb) return undefined;
+  let best: { id: number; pixels: number } | undefined;
+  for (const [fromId, toIds] of thmb) {
+    if (!toIds.includes(itemId)) continue;
+    const type = file.items.get(fromId)?.itemType;
+    if (type !== 'hvc1' && type !== 'hev1') continue;
+    let pixels = 0;
+    try {
+      const ispe = findProperty(propertiesForItem(file, fromId), 'ispe');
+      pixels = ispe ? ispe.width * ispe.height : 0;
+    } catch {
+      continue;
+    }
+    if (!best || pixels > best.pixels) best = { id: fromId, pixels };
+  }
+  return best?.id;
 }
 
 /** Item payload for a planned tile. */

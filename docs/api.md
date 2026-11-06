@@ -42,11 +42,33 @@ The decoder returns pixels, not a new HEIC file. EXIF and other source metadata 
 
 ## `convertHeic(input, options?)`
 
-Returns `Promise<ConvertedImage>` using the same inputs and decode options as `decodeHeic`. Adds `type: 'image/jpeg' | 'image/png'` (default JPEG) and `quality` (default `0.92`, a finite number from 0 to 1; ignored for PNG). Invalid type/quality values throw `TypeError`/`RangeError` before decoding.
+Returns `Promise<ConvertedImage>` using the same inputs and decode options as `decodeHeic`. Adds `type: 'image/jpeg' | 'image/png'` (default JPEG), `quality` (default `0.92`, a finite number from 0 to 1; ignored for PNG) and `exif` (below). Invalid type/quality/exif values throw `TypeError`/`RangeError` before decoding.
 
 The result contains `blob` and all `DecodedImage` metadata except `image`. Dimensions describe the encoded image. Transforms and `maxDimension` apply before encoding. Its bitmap and conversion canvas are released on success, cancellation, or encoder failure; callers do not need `close()`. Revoke any object URLs you create when finished.
 
-Conversion uses `OffscreenCanvas.convertToBlob`, including in workers. Platform encoding errors can propagate. An empty Blob or unexpected MIME type throws `HeicDecodeError`. Cancellation is checked before and after encoding, but cannot interrupt an encoder already running. Quality and encoded bytes can differ across browsers. Source EXIF is not copied; full HDR and cross-browser color equivalence are not promised. The software fallback remains explicit through `wasmLoader` or adapter registration.
+Conversion uses `OffscreenCanvas.convertToBlob`, including in workers. Platform encoding errors can propagate. An empty Blob or unexpected MIME type throws `HeicDecodeError`. Cancellation is checked before and after encoding, but cannot interrupt an encoder already running. Quality and encoded bytes can differ across browsers. Full HDR and cross-browser color equivalence are not promised. The software fallback remains explicit through `wasmLoader` or adapter registration.
+
+### EXIF
+
+| `exif` | Written to the JPEG |
+| --- | --- |
+| `'none'` (default) | Nothing from the source. Some encoders (WebKit) add their own color-space and dimension tags. |
+| `'all'` | The source EXIF block, including GPS. |
+| `'no-location'` | The source EXIF block with the GPS IFD pointer removed and every GPS byte, including out-of-line values, overwritten with zeros. |
+
+In both copying modes, Orientation is set to 1 and `PixelXDimension`/`PixelYDimension` to the encoded size, since the pixels are already transformed. All other tags, MakerNote included, are copied byte for byte; MakerNote contents are not inspected. Any Exif segment the browser encoder wrote is replaced. Requesting EXIF with `type: 'image/png'` throws `TypeError`.
+
+`ConvertedImage.exif` reports what was actually written. It is `'none'` with an `exif-missing` warning when the source has no EXIF, and `'none'` with an `exif-not-written` warning when the block is malformed or larger than one JPEG APP1 segment (about 64 KB). A malformed block is never written in `'no-location'` mode, because it cannot be proven free of location data.
+
+## `decodeHeicThumbnail(input, options?)`
+
+Returns `Promise<ThumbnailImage>`: a `DecodedImage` plus `embedded: boolean`. Takes the `decodeHeic` options plus `fallback: 'primary' | 'none'` (default `'primary'`).
+
+The thumbnail is the image item linked to the primary by a `thmb` reference (the largest, if there are several), decoded with WebCodecs and its own `irot`/`imir`/`clap` applied. `maxDimension` downsizes it further but never upscales. If the file has no thumbnail, `strategy` excludes WebCodecs, or the decode fails, `'primary'` decodes the primary image through the normal cascade with `maxDimension` defaulting to the thumbnail's longest side, or 320 when there is none; `'none'` throws `HeicUnsupportedError` listing the attempts. The caller owns and must close `image`, as with `decodeHeic`.
+
+## `readExif(input)`
+
+Returns `Promise<Uint8Array | null>`: a copy of the primary image's EXIF as a TIFF block starting at the `II`/`MM` byte-order mark, or `null`. The Exif item is found by its `cdsc` reference, or as the only Exif item in the file. Values are as stored: Orientation describes the coded pixels, which `decodeHeic` has already rotated.
 
 ## `isHeic(input)`
 
@@ -112,7 +134,8 @@ These functions do not decode pixels and accept `ArrayBuffer`/`Uint8Array` where
 | `readItemData` | Extract an item's payload from its extents. |
 | `readGrid`, `parseGridPayload` | Read grid references and grid descriptors. |
 | `planDecode` | Resolve an `ImagePlan` with tiles, groups, display size, transforms, and warnings. |
+| `planItem`, `findThumbnailItemId` | Plan any image item of a parsed file; find the primary's `thmb` thumbnail item. |
 | `parseHvcC`, `hvccToCodecString` | Parse HEVC configuration and produce a WebCodecs codec string. |
 | `hvccToAnnexBPrologue`, `lengthPrefixedToAnnexB` | Prepare HEVC NAL data for Annex B decoding. |
 
-Exported types include `BinaryInput`, `IsHeicResult`, `DecodeOptions`, `DecodedImage`, `ConvertOptions`, `ConvertedImage`, `Strategy`, `OutputColorSpace`, `SourceColor`, `TransformsApplied`, `HeicWarning`, `SupportReport`, `HeicErrorContext`, `DecoderAdapter`, `AdapterRequest`, `AdapterResult`, `HeifFile`, `ItemInfo`, `ItemLocation`, `ItemProperty`, `ItemProperties`, `ItemReferences`, `GridDescriptor`, `HvcC`, `ImagePlan`, `PlannedTile`, `TileGroup`, and `TransformOp`. The WASM entry point additionally exports `WasmAdapterOptions`.
+Exported types include `BinaryInput`, `IsHeicResult`, `DecodeOptions`, `DecodedImage`, `ConvertOptions`, `ConvertedImage`, `ExifMode`, `ThumbnailOptions`, `ThumbnailImage`, `Strategy`, `OutputColorSpace`, `SourceColor`, `TransformsApplied`, `HeicWarning`, `SupportReport`, `HeicErrorContext`, `DecoderAdapter`, `AdapterRequest`, `AdapterResult`, `HeifFile`, `ItemInfo`, `ItemLocation`, `ItemProperty`, `ItemProperties`, `ItemReferences`, `GridDescriptor`, `HvcC`, `ImagePlan`, `PlannedTile`, `TileGroup`, and `TransformOp`. The WASM entry point additionally exports `WasmAdapterOptions`.
