@@ -100,5 +100,22 @@
     },
     "features": {},
     "reference": "asym-irot-90.ref.png"
+  },
+  "exif-thumb.heic": {
+    "device": "fixture",
+    "brand": "heic",
+    "expect": {
+      "width": 320,
+      "height": 480,
+      "isGrid": false,
+      "tileCount": 1,
+      "gridColumns": 1,
+      "gridRows": 1,
+      "bitDepth": 8,
+      "rotation": 270,
+      "mirrored": "none"
+    },
+    "features": {},
+    "reference": "exif-thumb.ref.png"
   }
 }

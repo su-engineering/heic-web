@@ -102,7 +102,35 @@ form.append('image', converted.blob, 'photo.jpg');
 console.log(converted.width, converted.height, converted.strategy, converted.warnings);
 ```
 
-Install `libheif-js` for the fallback in this example. Omit `wasmLoader` if you only want browser decoding. Conversion runs in browsers and workers, releases its own bitmap, and does not copy source EXIF into the output. Browser encoders determine the final color and compression behavior.
+Install `libheif-js` for the fallback in this example. Omit `wasmLoader` if you only want browser decoding. Conversion runs in browsers and workers and releases its own bitmap. Browser encoders determine the final color and compression behavior.
+
+### Keep EXIF in the JPEG
+
+Source EXIF is dropped unless you ask for it, so a photo's location never leaves the device by accident:
+
+```ts
+const converted = await convertHeic(file, { exif: 'no-location' }); // or 'all'
+console.log(converted.exif); // what was actually written: 'none', 'all' or 'no-location'
+```
+
+`'no-location'` removes the GPS block and overwrites its bytes; camera, lens and capture time stay. Either mode rewrites Orientation to 1 and the pixel dimensions to the output size, because the pixels are already upright; leaving the iPhone's Orientation in place makes viewers rotate the photo a second time. EXIF is written to JPEG only. When the source has no EXIF, the result says `exif: 'none'` with an `exif-missing` warning.
+
+To read the metadata without converting, `readExif(file)` returns the raw TIFF block for an EXIF parser such as [exifr](https://github.com/MikeKovarik/exifr).
+
+## Fast previews from the embedded thumbnail
+
+Many iPhone photos carry a ~320 px HEVC thumbnail next to the full 12 to 48 MP grid. Decoding it is far cheaper than decoding the photo, which suits gallery grids and upload previews:
+
+```ts
+import { decodeHeicThumbnail } from '@su-engineering/heic';
+
+const preview = await decodeHeicThumbnail(file);
+canvas.getContext('2d')!.drawImage(preview.image, 0, 0);
+preview.image.close();
+console.log(preview.embedded); // false when the full image was decoded instead
+```
+
+The embedded thumbnail is decoded with WebCodecs. Recent iPhones often omit it, and some browsers cannot decode it; in both cases the primary image is decoded through the normal cascade and downscaled to the thumbnail's size (320 px when there is none). Pass `fallback: 'none'` to get a `HeicUnsupportedError` instead.
 
 ## Choose by capability
 
@@ -122,7 +150,9 @@ HEVC support depends on the browser, OS, installed codecs, hardware, and file pr
 | Export | Purpose |
 | --- | --- |
 | `decodeHeic(input, options?)` | Decode a `Blob`, `File`, `ArrayBuffer`, or `Uint8Array` to an `ImageBitmap` plus metadata. |
-| `convertHeic(input, options?)` | Encode the primary image to a JPEG/PNG `Blob` plus decode metadata; releases its bitmap automatically. |
+| `convertHeic(input, options?)` | Encode the primary image to a JPEG/PNG `Blob` plus decode metadata, optionally with EXIF; releases its bitmap automatically. |
+| `decodeHeicThumbnail(input, options?)` | Decode the embedded thumbnail, or a downscaled primary when there is none. |
+| `readExif(input)` | Return the raw EXIF TIFF block, or `null`. |
 | `isHeic(input)` | Inspect up to the first 64 KiB for HEIC identification and coding hints. |
 | `probeSupport()` | Probe native HEIC decoding and accepted WebCodecs HEVC configurations. |
 | `parseHeif(buffer)` | Inspect container items, properties, references, and locations without decoding pixels. |
@@ -133,7 +163,7 @@ Common decode options are `strategy`, `maxDimension`, `colorSpace`, `signal`, an
 
 ## Scope and limits
 
-This library returns pixels or a JPEG/PNG conversion of the primary HEVC image. It does not encode HEIC, supply an upload UI, preserve EXIF in the output, or decode AVIF, animation, or Live Photo video. Recognized alpha, depth, and HDR gain-map auxiliary items produce warnings; warning coverage is not exhaustive.
+This library returns pixels or a JPEG/PNG conversion of the primary HEVC image. It does not encode HEIC, supply an upload UI, write EXIF to PNG, or decode AVIF, animation, or Live Photo video. Recognized alpha, depth, and HDR gain-map auxiliary items produce warnings; warning coverage is not exhaustive.
 
 `maxDimension` reduces the returned bitmap size. **It does not cap peak decode memory:** decoding and compositing may still allocate the full-resolution image. Apply file-size limits, bound concurrent decodes, and use workers for large or untrusted uploads.
 

@@ -1,8 +1,8 @@
 #!/bin/sh
 # Regenerates test/fixtures/generated/.
 #
-# Requires libheif (heif-enc, heif-convert, heif-info) and ImageMagick.
-#   brew install libheif imagemagick
+# Requires libheif (heif-enc, heif-convert, heif-info), ImageMagick and exiftool.
+#   brew install libheif imagemagick exiftool
 set -eu
 
 OUT=test/fixtures/generated
@@ -30,6 +30,16 @@ for spec in "irot 90" "irot 180" "irot 270" "imir 0" "imir 1"; do
   node --experimental-strip-types tools/inject-property.ts \
     "$OUT/asym-base.heic" "$OUT/asym-$kind-$value.heic" "$kind" "$value"
 done
+
+# EXIF and an embedded thumbnail, the way an iPhone writes them: heif-enc turns
+# the JPEG's Orientation into irot but leaves the EXIF tag in place, so the
+# converted output must reset it. The GPS position is synthetic (Barcelona).
+magick "$TMP/asym.png" "$TMP/asym.jpg"
+exiftool -q -overwrite_original -Make=heic-web -Model=fixture -Orientation#=6 \
+  -DateTimeOriginal="2026:01:02 03:04:05" \
+  -GPSLatitude=41.3851 -GPSLatitudeRef=N -GPSLongitude=2.1734 -GPSLongitudeRef=E \
+  -GPSAltitude=12 -ExifImageWidth=480 -ExifImageHeight=320 "$TMP/asym.jpg"
+heif-enc -q 92 -t 96 -o "$OUT/exif-thumb.heic" "$TMP/asym.jpg" >/dev/null
 
 # An AVIF, which shares the mif1 brand with HEIC: isHeic() must decline it while
 # still reporting that it is AV1-coded.
